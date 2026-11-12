@@ -5,9 +5,9 @@ function Footer() {
     <footer className="footer">
       <div className="container footer-inner">
         <div>
-          <strong style={{ color: '#ffffff' }}>Команда TechBit</strong> — Курсовий проект (2026)
+          <strong style={{ color: '#ffffff' }}>TechBIT</strong> © 2026
           <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '4px' }}>
-            Система діагностики гальмівних колодок і ходової за рахунок аналізу вібрації та температури 4 коліс.
+            Датчики контролю гальмівних колодок та ходової для вантажного й легкового транспорту.
           </div>
         </div>
 
@@ -17,7 +17,7 @@ function Footer() {
             target="_blank"
             rel="noreferrer"
             className="social-btn"
-            title="Instagram команди TechBit"
+            title="Instagram TechBIT"
           >
             Instagram
           </a>
@@ -26,23 +26,14 @@ function Footer() {
             target="_blank"
             rel="noreferrer"
             className="social-btn"
-            title="Telegram канал / контакт TechBit"
+            title="Telegram TechBIT"
           >
             Telegram
           </a>
           <a
-            href="https://github.com/nzmnq/TechBIT"
-            target="_blank"
-            rel="noreferrer"
-            className="social-btn"
-            title="Репозиторій проекту на GitHub"
-          >
-            GitHub
-          </a>
-          <a
             href="mailto:nedovizt26@gmail.com"
             className="social-btn"
-            title="Написати на пошту команди TechBIT"
+            title="Написати на пошту TechBIT"
           >
             Email
           </a>

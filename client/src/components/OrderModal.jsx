@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
 
-function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
+function OrderModal({
+  isOpen,
+  onClose,
+  cartItems,
+  onUpdateQuantity,
+  onRemoveItem,
+  onClearCart
+}) {
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState('Нова Пошта по Україні');
   const [comment, setComment] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -30,6 +38,7 @@ function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
         body: JSON.stringify({
           customerName,
           phone,
+          deliveryMethod,
           comment,
           items: cartItems
         })
@@ -47,7 +56,7 @@ function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
         onClearCart();
       }
     } catch (err) {
-      setErrorMessage('Не вдалося з’єднатися з Node.js сервером.');
+      setErrorMessage('Не вдалося з’єднатися з сервером. Спробуйте ще раз.');
     } finally {
       setSubmitting(false);
     }
@@ -57,7 +66,7 @@ function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-window" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Оформлення замовлення TechBit</h3>
+          <h3>Оформлення замовлення</h3>
           <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
             Закрити
           </button>
@@ -97,18 +106,41 @@ function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
 
         {cartItems.length === 0 ? (
           <p style={{ color: '#52606d', marginBottom: '16px' }}>
-            Список замовлення порожній. Перейдіть у каталог, щоб обрати комплект на 2 або 4 датчики.
+            Кошик порожній. Перейдіть у каталог, щоб обрати комплект на 2 або 4 датчики.
           </p>
         ) : (
           <div style={{ marginBottom: '16px' }}>
             {cartItems.map((item) => (
               <div key={item.id} className="cart-item-row">
-                <div>
+                <div style={{ flex: 1 }}>
                   <strong>{item.name}</strong>
-                  <div style={{ fontSize: '12px', color: '#52606d' }}>
-                    Кількість: {item.quantity} шт. × {item.price} грн
+                  <div style={{ fontSize: '12.5px', color: '#52606d', marginTop: '2px' }}>
+                    {item.price} грн / шт.
                   </div>
                 </div>
+
+                <div className="qty-control">
+                  <button
+                    type="button"
+                    className="qty-btn"
+                    onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
+                    title="Зменшити кількість"
+                  >
+                    -
+                  </button>
+                  <span style={{ minWidth: '20px', textAlign: 'center', fontWeight: 600 }}>
+                    {item.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    className="qty-btn"
+                    onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                    title="Збільшити кількість"
+                  >
+                    +
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -118,22 +150,22 @@ function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
                 </button>
               </div>
             ))}
-            <div style={{ marginTop: '10px', textAlign: 'right', fontWeight: 700, fontSize: '16px' }}>
-              Разом: {totalAmount} грн
+            <div style={{ marginTop: '12px', textAlign: 'right', fontWeight: 700, fontSize: '17px' }}>
+              Разом до сплати: {totalAmount} грн
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-field">
-            <label htmlFor="order-name">Ваше ім’я або назва автопарку *</label>
+            <label htmlFor="order-name">Ім’я або назва компанії / автопарку *</label>
             <input
               id="order-name"
               type="text"
               className="filter-input"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Наприклад: Олександр / АТП Логістик"
+              placeholder="Наприклад: Олександр або ТОВ Логістика"
               required
             />
           </div>
@@ -152,14 +184,28 @@ function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
           </div>
 
           <div className="form-field">
-            <label htmlFor="order-comment">Коментар (тип авто / кількість осей)</label>
+            <label htmlFor="order-delivery">Спосіб отримання</label>
+            <select
+              id="order-delivery"
+              className="filter-select"
+              value={deliveryMethod}
+              onChange={(e) => setDeliveryMethod(e.target.value)}
+            >
+              <option value="Нова Пошта по Україні">Нова Пошта по Україні (відділення / кур’єр)</option>
+              <option value="Самовивіз / Монтаж на СТО">Самовивіз або консультація з монтажу на СТО</option>
+              <option value="Корпоративне замовлення (безготівка)">Для автопарку (рахунок / безготівковий розрахунок)</option>
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="order-comment">Модель авто / місто доставки</label>
             <input
               id="order-comment"
               type="text"
               className="filter-input"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Наприклад: Тягач DAF XF, потрібна консультація по ACC"
+              placeholder="Наприклад: м. Львів, DAF XF або Mercedes Sprinter"
             />
           </div>
 
@@ -169,7 +215,7 @@ function OrderModal({ isOpen, onClose, cartItems, onRemoveItem, onClearCart }) {
               className="btn btn-primary"
               disabled={submitting || cartItems.length === 0}
             >
-              {submitting ? 'Відправка...' : 'Підтвердити замовлення'}
+              {submitting ? 'Оформлення...' : 'Підтвердити замовлення'}
             </button>
           </div>
         </form>

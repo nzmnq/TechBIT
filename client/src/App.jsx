@@ -34,6 +34,18 @@ function App() {
     setIsCartOpen(true);
   }
 
+  function handleUpdateQuantity(productId, newQuantity) {
+    if (newQuantity <= 0) {
+      handleRemoveFromCart(productId);
+      return;
+    }
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === productId ? { ...item, quantity: Math.min(50, newQuantity) } : item
+      )
+    );
+  }
+
   function handleRemoveFromCart(productId) {
     setCartItems((prev) => prev.filter((item) => item.id !== productId));
   }
@@ -69,7 +81,9 @@ function App() {
             />
           )}
 
-          {activePage === 'about' && <AboutPage />}
+          {activePage === 'about' && (
+            <AboutPage onNavigate={(page) => setActivePage(page)} />
+          )}
         </div>
       </main>
 
@@ -79,6 +93,7 @@ function App() {
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cartItems={cartItems}
+        onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveFromCart}
         onClearCart={handleClearCart}
       />

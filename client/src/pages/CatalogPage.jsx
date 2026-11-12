@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import ProductModal from '../components/ProductModal';
 
 function CatalogPage({ initialCategory = 'all', onAddToCart }) {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
+  const [activeProduct, setActiveProduct] = useState(null);
 
   // Стани фільтрів
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [vehicleType, setVehicleType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [maxPrice, setMaxPrice] = useState(5000);
+  const [maxPrice, setMaxPrice] = useState(6000);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState('default');
 
@@ -18,7 +20,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
     setSelectedCategory(initialCategory);
   }, [initialCategory]);
 
-  // Завантаження списку категорій з Node.js API
+  // Завантаження категорій з API
   useEffect(() => {
     async function fetchCategories() {
       try {
@@ -28,13 +30,13 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
           setCategories(data);
         }
       } catch (err) {
-        // Ігноруємо помилку, якщо сервер перезапускається
+        // Fallback категорії залишаться доступними
       }
     }
     fetchCategories();
   }, []);
 
-  // Завантаження відфільтрованих товарів з Node.js API
+  // Завантаження відфільтрованих товарів з API
   useEffect(() => {
     async function fetchProducts() {
       setLoading(true);
@@ -57,7 +59,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
         setProducts(data.items || []);
       } catch (err) {
         setApiError(
-          'Не вдалося отримати дані з Node.js API. Переконайтеся, що сервер запущено на порту 5000.'
+          'Не вдалося завантажити каталог із сервера. Переконайтеся, що Node.js сервер запущено.'
         );
       } finally {
         setLoading(false);
@@ -71,7 +73,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
     setSelectedCategory('all');
     setVehicleType('all');
     setSearchQuery('');
-    setMaxPrice(5000);
+    setMaxPrice(6000);
     setInStockOnly(false);
     setSortBy('default');
   }
@@ -80,26 +82,26 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
     <div>
       <div className="section-box" style={{ marginBottom: '20px', padding: '18px 24px' }}>
         <h1 className="page-title" style={{ marginBottom: '4px' }}>
-          Каталог систем та датчиків TechBit
+          Каталог систем та датчиків TechBIT
         </h1>
         <p className="page-subtitle" style={{ marginBottom: 0 }}>
-          Оберіть комплект на 2 датчики (одна вісь) або повний комплект на всі 4 датчики для вашого автомобіля чи фури.
+          Оберіть готовий комплект на 4 колеса, на одну вісь (2 датчики) або додаткові комплектуючі для вашого транспорту.
         </p>
       </div>
 
       <div className="catalog-layout">
-        {/* Ліва панель фільтрів */}
+        {/* Панель фільтрів */}
         <aside className="filter-panel">
           <div className="filter-group">
-            <span className="filter-title">Категорії комплектів</span>
+            <span className="filter-title">Категорії</span>
             <div className="category-list">
               {(categories.length > 0
                 ? categories
                 : [
-                    { id: 'all', name: 'Усі позиції', count: 8 },
+                    { id: 'all', name: 'Усі позиції', count: 9 },
                     { id: 'kit-4', name: 'Комплекти на 4 датчики (всі колеса)', count: 3 },
                     { id: 'kit-2', name: 'Комплекти на 2 датчики (1 вісь)', count: 3 },
-                    { id: 'accessories', name: 'Модулі та комплектуючі', count: 2 }
+                    { id: 'accessories', name: 'Датчики та комплектуючі', count: 3 }
                   ]
               ).map((cat) => (
                 <button
@@ -123,7 +125,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
               id="filter-search"
               type="text"
               className="filter-input"
-              placeholder="Наприклад: фура, 2x, 4x, ACC..."
+              placeholder="Наприклад: фура, причіп, 2x, 4x..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -140,21 +142,21 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
               onChange={(e) => setVehicleType(e.target.value)}
             >
               <option value="all">Усі типи транспорту</option>
-              <option value="truck">Фура / Вантажне авто (24V)</option>
-              <option value="car">Легкове авто (12V)</option>
-              <option value="van">Комерційний бус (12V/24V)</option>
+              <option value="truck">Фура / Причіп / Лафет</option>
+              <option value="car">Легкове авто / 4WD (12V)</option>
+              <option value="van">Комерційний бус / СТО</option>
             </select>
           </div>
 
           <div className="filter-group">
             <label className="filter-title" htmlFor="filter-price">
-              Максимальна ціна: <strong>{maxPrice} грн</strong>
+              Ціна до: <strong>{maxPrice} грн</strong>
             </label>
             <input
               id="filter-price"
               type="range"
               min="500"
-              max="5000"
+              max="6000"
               step="100"
               style={{ width: '100%' }}
               value={maxPrice}
@@ -170,7 +172,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
               }}
             >
               <span>500 грн</span>
-              <span>5 000 грн</span>
+              <span>6 000 грн</span>
             </div>
           </div>
 
@@ -181,7 +183,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                 checked={inStockOnly}
                 onChange={(e) => setInStockOnly(e.target.checked)}
               />
-              <span>Тільки товари в наявності</span>
+              <span>Тільки в наявності</span>
             </label>
           </div>
 
@@ -191,15 +193,15 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
             style={{ width: '100%' }}
             onClick={handleResetFilters}
           >
-            Скинути всі фільтри
+            Скинути фільтри
           </button>
         </aside>
 
-        {/* Права частина: сортування та список товарів */}
+        {/* Список товарів */}
         <div>
           <div className="catalog-toolbar">
             <div>
-              Знайдено позицій: <strong>{products.length}</strong>
+              Знайдено товарів: <strong>{products.length}</strong>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -214,8 +216,8 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                 onChange={(e) => setSortBy(e.target.value)}
               >
                 <option value="default">За замовчуванням</option>
-                <option value="price-asc">Від дешевших до дорожчих</option>
-                <option value="price-desc">Від дорожчих до дешевших</option>
+                <option value="price-asc">Спочатку дешевші</option>
+                <option value="price-desc">Спочатку дорожчі</option>
                 <option value="sensors-desc">За кількістю датчиків</option>
               </select>
             </div>
@@ -228,10 +230,10 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
           )}
 
           {loading ? (
-            <div className="section-box">Завантаження каталогу з сервера...</div>
+            <div className="section-box">Завантаження каталогу...</div>
           ) : products.length === 0 ? (
             <div className="section-box">
-              За обраними фільтрами товарів не знайдено. Спробуйте змінити категорію або скинути фільтри.
+              За заданими фільтрами нічого не знайдено. Спробуйте змінити категорію або скинути фільтри.
             </div>
           ) : (
             <div className="products-grid">
@@ -268,22 +270,33 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                         <div>
                           <strong>Захист:</strong> {product.specs.protection}
                         </div>
-                        <div>
-                          <strong>Обробка сигналу:</strong> {product.specs.sampling}
-                        </div>
+                        {product.warranty && (
+                          <div>
+                            <strong>Гарантія:</strong> {product.warranty}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
 
                   <div className="product-footer">
                     <div className="product-price">{product.price} грн</div>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => onAddToCart(product)}
-                    >
-                      У замовлення
-                    </button>
+                    <div className="product-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setActiveProduct(product)}
+                      >
+                        Детальніше
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => onAddToCart(product)}
+                      >
+                        У кошик
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -291,6 +304,12 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
           )}
         </div>
       </div>
+
+      <ProductModal
+        product={activeProduct}
+        onClose={() => setActiveProduct(null)}
+        onAddToCart={onAddToCart}
+      />
     </div>
   );
 }

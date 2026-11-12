@@ -5,8 +5,8 @@ function Navbar({ activePage, onNavigate, cartCount, onOpenCart }) {
     <header className="navbar">
       <div className="container navbar-inner">
         <div className="brand" onClick={() => onNavigate('home')}>
-          <span className="brand-name">TechBit</span>
-          <span className="brand-tag">Контроль коліс 4x ACC + ML</span>
+          <span className="brand-name">TechBIT</span>
+          <span className="brand-tag">Контроль гальм та ходової</span>
         </div>
 
         <nav className="nav-links">
@@ -22,19 +22,19 @@ function Navbar({ activePage, onNavigate, cartCount, onOpenCart }) {
             className={`nav-btn ${activePage === 'catalog' ? 'active' : ''}`}
             onClick={() => onNavigate('catalog')}
           >
-            Каталог систем
+            Каталог
           </button>
           <button
             type="button"
             className={`nav-btn ${activePage === 'about' ? 'active' : ''}`}
             onClick={() => onNavigate('about')}
           >
-            Про нас (About Us)
+            Про нас
           </button>
         </nav>
 
         <button type="button" className="cart-btn" onClick={onOpenCart}>
-          <span>Замовлення</span>
+          <span>Кошик</span>
           <span className="cart-count">{cartCount}</span>
         </button>
       </div>

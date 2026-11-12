@@ -516,13 +516,77 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.product-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .product-price {
   font-size: 18px;
   font-weight: 700;
+  color: var(--text-main);
+}
+
+.qty-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qty-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.qty-btn:hover {
+  background: var(--bg-subtle);
+}
+
+.faq-item {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  background-color: #f8fafc;
+}
+
+.faq-item h4 {
+  font-size: 15px;
+  margin-bottom: 6px;
+  color: var(--text-main);
+}
+
+.faq-item p {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.consult-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.modal-section {
+  margin-bottom: 14px;
+}
+
+.modal-section h4 {
+  font-size: 14px;
+  margin-bottom: 6px;
   color: var(--text-main);
 }
 
@@ -641,7 +705,8 @@ a {
   .products-grid,
   .grid-2,
   .grid-3,
-  .grid-4 {
+  .grid-4,
+  .consult-grid {
     grid-template-columns: 1fr;
   }
 }

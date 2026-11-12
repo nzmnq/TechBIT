@@ -33,7 +33,7 @@ function saveOrders(orders) {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'TechBit API',
+    service: 'TechBIT Store API',
     timestamp: new Date().toISOString()
   });
 });
@@ -46,25 +46,25 @@ app.get('/api/categories', (req, res) => {
     {
       id: 'all',
       name: 'Усі позиції',
-      description: 'Повний перелік систем та комплектуючих TechBit',
+      description: 'Повний асортимент систем контролю та комплектуючих TechBIT',
       count: products.length
     },
     {
       id: 'kit-4',
       name: 'Комплекти на 4 датчики (всі колеса)',
-      description: 'Повна система на 4 точки зчитування з перехресним порівнянням коліс',
+      description: 'Повний захист усіх 4 коліс із перехресним аналізом вібрації та температури',
       count: products.filter((p) => p.category === 'kit-4').length
     },
     {
       id: 'kit-2',
       name: 'Комплекти на 2 датчики (1 вісь)',
-      description: 'Рішення для контролю однієї обраної осі (передньої або задньої)',
+      description: 'Контроль однієї осі авто, мікроавтобуса, причепа чи лафета',
       count: products.filter((p) => p.category === 'kit-2').length
     },
     {
       id: 'accessories',
-      name: 'Модулі та комплектуючі',
-      description: 'Окремі датчики, центральні блоки обробки та живлення ACC',
+      name: 'Датчики та комплектуючі',
+      description: 'Додаткові датчики, блоки управління та подовжені кабельні траси',
       count: products.filter((p) => p.category === 'accessories').length
     }
   ];
@@ -78,29 +78,24 @@ app.get('/api/products', (req, res) => {
     let products = loadProducts();
     const { category, vehicleType, inStockOnly, maxPrice, search, sort } = req.query;
 
-    // Фільтр за категорією (kit-2, kit-4, accessories)
     if (category && category !== 'all') {
       products = products.filter((item) => item.category === category);
     }
 
-    // Фільтр за типом транспорту (truck, car, van, universal)
     if (vehicleType && vehicleType !== 'all') {
       products = products.filter(
         (item) => item.vehicleType === vehicleType || item.vehicleType === 'universal'
       );
     }
 
-    // Фільтр за наявністю
     if (inStockOnly === 'true') {
       products = products.filter((item) => item.inStock === true);
     }
 
-    // Фільтр за максимальною ціною
     if (maxPrice && !Number.isNaN(Number(maxPrice))) {
       products = products.filter((item) => item.price <= Number(maxPrice));
     }
 
-    // Пошук за назвою, артикулом або описом
     if (search && search.trim() !== '') {
       const q = search.trim().toLowerCase();
       products = products.filter(
@@ -111,7 +106,6 @@ app.get('/api/products', (req, res) => {
       );
     }
 
-    // Сортування
     if (sort === 'price-asc') {
       products.sort((a, b) => a.price - b.price);
     } else if (sort === 'price-desc') {
@@ -141,56 +135,34 @@ app.get('/api/products/:id', (req, res) => {
   res.json(product);
 });
 
-// Інформація про команду та курсовий проект TechBit
+// Інформація про компанію TechBIT (суто для клієнтів та партнерів)
 app.get('/api/about', (req, res) => {
   res.json({
-    teamName: 'TechBIT',
-    projectTitle: 'Автономна система вібраційного моніторингу підшипників маточини та підклинювання гальм',
-    direction: 'Автомобільна телеметрія та IoT (Embedded Automotive IoT)',
-    mvpBudget: '3 400 грн ($85)',
-    bomTotal: '2 126.25 грн',
+    companyName: 'TechBIT',
+    headline: 'Системи ранньої діагностики гальмівних колодок та ходової частини для вашого транспорту',
     summary:
-      'Команда TechBIT розробляє систему для раннього виявлення заклинювання гальмівних колодок та руйнування підшипників маточини завдяки датчикам на кожному колесі, що безперервно аналізують вібрацію та температуру під час руху.',
+      'TechBIT — українська команда розробників автомобільної електроніки та систем телеметрії. Ми створюємо надійні датчики моніторингу стану коліс, які допомагають водіям та власникам автопарків виявляти поломки на ранній стадії й уникати дорогого ремонту на трасі.',
     teamMembers: [
       {
         name: 'Назарій Доскочинський',
-        role: 'Hardware Engineer / Lead',
+        role: 'Керівник напряму електроніки та виробництва',
         email: 'nazar.doskochynskyi@gmail.com',
-        responsibility: 'Схемотехніка, аналоговий каскад (MCP6002-I/P, Vref=1.65В, K=3), розводка плати в KiCad, пайка та тестування захисту від перенапруг.'
+        responsibility:
+          'Відповідає за надійність електронних вузлів, захист обладнання від перепадів напруги та контроль якості кожної партії перед відправкою клієнтам.'
       },
       {
         name: 'Тарас Недовіз',
-        role: 'Firmware Engineer',
+        role: 'Розробник програмного забезпечення та алгоритмів',
         email: 'nedovizt26@gmail.com',
-        responsibility: 'Прошивка периферійних ESP32-C3 SuperMini та центральної ESP32-S3: АЦП 20 kSPS через DMA, алгоритм RMS, передача пакетів по CAN-шині (500 kbps).'
+        responsibility:
+          'Розробив алгоритми аналізу вібрації та машинного навчання, які безпомилково відрізняють нерівності дороги від реального дефекту колодки чи підшипника.'
       },
       {
         name: 'Матвій Івков',
-        role: 'Mechanical Engineer',
+        role: 'Інженер з монтажу, механіки та випробувань',
         email: 'matviyivk3@gmail.com',
-        responsibility: 'Розробка кріплення датчиків детонації до ходової частини, проєктування герметичного корпусу IP67, калібрування та польові тести.'
-      }
-    ],
-    howItWorks: [
-      {
-        step: '01',
-        title: '4 датчики та аналоговий каскад',
-        text: 'На кожне колесо встановлюється п’єзоелектричний датчик вібрації з каскадним підсилювачем на MCP6002-I/P (K=3, Vref=1.65В) і двоступеневим захистом BAT54 від ударів у ямах. Живлення подається від акумулятора у статусі ключа ACC через перетворювачі MP1584EN та Mini360.'
-      },
-      {
-        step: '02',
-        title: 'Оцифровка 20 kSPS та шина CAN',
-        text: 'Колісні мікроконтролери ESP32-C3 SuperMini безперервно зчитують сигнал на частоті 20 kSPS через DMA, обчислюють середньоквадратичну амплітуду (RMS) і передають пакети по CAN-шині (SN65HVD230, 500 kbps) на центральний модуль ESP32-S3.'
-      },
-      {
-        step: '03',
-        title: 'Порівняння коліс та фільтрація поганої дороги',
-        text: 'Система порівнює показники всіх коліс між собою. Одночасні сильні вібрації на всіх колесах під час руху по бруківці чи ямах розпізнаються як дорожнє покриття і не викликають хибної тривоги.'
-      },
-      {
-        step: '04',
-        title: 'ML-класифікація та сигнал на ТО',
-        text: 'Машинне навчання та RMS-алгоритм відрізняють разовий удар від ями від тривалої аномалії (>3 секунд) та перегріву на одному колесі, вчасно попереджаючи водія про необхідність звернутися на ТО.'
+        responsibility:
+          'Відповідає за герметичні корпуси IP67, універсальні кріплення під різні типи осей і консультації СТО та водіїв щодо встановлення.'
       }
     ]
   });
@@ -198,24 +170,43 @@ app.get('/api/about', (req, res) => {
 
 // Оформлення замовлення з каталогу
 app.post('/api/orders', (req, res) => {
-  const { customerName, phone, comment, items } = req.body;
+  const { customerName, phone, deliveryMethod, comment, items } = req.body;
 
   if (!customerName || !phone || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      error: 'Будь ласка, заповніть ім’я, телефон та оберіть хоча б один товар.'
+      error: 'Будь ласка, вкажіть ім’я, контактний телефон та додайте хоча б один комплект.'
+    });
+  }
+
+  const catalogProducts = loadProducts();
+  const verifiedItems = [];
+
+  for (const reqItem of items) {
+    const product = catalogProducts.find((p) => p.id === Number(reqItem.id));
+    if (!product) {
+      return res.status(400).json({ error: `Товар з ID ${reqItem.id} не знайдено в каталозі.` });
+    }
+    const qty = Math.max(1, Math.min(50, parseInt(reqItem.quantity, 10) || 1));
+    verifiedItems.push({
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      price: product.price,
+      quantity: qty
     });
   }
 
   const orders = loadOrders();
-  const totalAmount = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
+  const totalAmount = verifiedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const newOrder = {
     id: Date.now(),
     createdAt: new Date().toISOString(),
     customerName: customerName.trim(),
     phone: phone.trim(),
+    deliveryMethod: deliveryMethod || 'Нова Пошта по Україні',
     comment: comment ? comment.trim() : '',
-    items,
+    items: verifiedItems,
     totalAmount,
     status: 'Нове замовлення'
   };
@@ -224,12 +215,40 @@ app.post('/api/orders', (req, res) => {
   saveOrders(orders);
 
   res.status(201).json({
-    message: 'Замовлення успішно прийнято! Команда TechBit зв’яжеться з вами.',
+    message: `Замовлення №${newOrder.id} успішно оформлено! Менеджер TechBIT зв’яжеться з вами найближчим часом.`,
     order: newOrder
   });
 });
 
-// Роздача статики клієнта, якщо зібрано білд
+// Заявка на швидкий підбір / консультацію
+app.post('/api/consultations', (req, res) => {
+  const { name, phone, vehicleInfo } = req.body;
+  if (!name || !phone) {
+    return res.status(400).json({ error: 'Вкажіть ім’я та телефон для зворотного дзвінка.' });
+  }
+
+  const orders = loadOrders();
+  const inquiry = {
+    id: Date.now(),
+    type: 'consultation',
+    createdAt: new Date().toISOString(),
+    customerName: name.trim(),
+    phone: phone.trim(),
+    comment: vehicleInfo ? vehicleInfo.trim() : 'Запит на підбір системи TechBIT',
+    items: [],
+    totalAmount: 0,
+    status: 'Очікує консультації'
+  };
+
+  orders.push(inquiry);
+  saveOrders(orders);
+
+  res.status(201).json({
+    message: 'Дякуємо! Спеціаліст TechBIT зателефонує вам та допоможе підібрати комплект під ваше авто.'
+  });
+});
+
+// Роздача зібраного клієнта
 const clientBuildPath = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
@@ -239,5 +258,5 @@ if (fs.existsSync(clientBuildPath)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`[TechBit Server] Node.js API запущено на http://localhost:${PORT}`);
+  console.log(`[TechBIT Server] Node.js API запущено на http://localhost:${PORT}`);
 });
