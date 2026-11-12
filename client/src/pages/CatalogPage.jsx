@@ -10,7 +10,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [vehicleType, setVehicleType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [maxPrice, setMaxPrice] = useState(10000);
+  const [maxPrice, setMaxPrice] = useState(5000);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState('default');
 
@@ -71,7 +71,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
     setSelectedCategory('all');
     setVehicleType('all');
     setSearchQuery('');
-    setMaxPrice(10000);
+    setMaxPrice(5000);
     setInStockOnly(false);
     setSortBy('default');
   }
@@ -153,9 +153,9 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
             <input
               id="filter-price"
               type="range"
-              min="1000"
-              max="10000"
-              step="200"
+              min="500"
+              max="5000"
+              step="100"
               style={{ width: '100%' }}
               value={maxPrice}
               onChange={(e) => setMaxPrice(Number(e.target.value))}
@@ -169,8 +169,8 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                 marginTop: '4px'
               }}
             >
-              <span>1 000 грн</span>
-              <span>10 000 грн</span>
+              <span>500 грн</span>
+              <span>5 000 грн</span>
             </div>
           </div>
 
@@ -266,10 +266,10 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                           <strong>Склад:</strong> {product.specs.sensors}
                         </div>
                         <div>
-                          <strong>Клас захисту:</strong> {product.specs.protection}
+                          <strong>Захист:</strong> {product.specs.protection}
                         </div>
                         <div>
-                          <strong>Робоча температура:</strong> {product.specs.tempRange}
+                          <strong>Обробка сигналу:</strong> {product.specs.sampling}
                         </div>
                       </div>
                     )}

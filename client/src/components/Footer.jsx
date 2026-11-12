@@ -40,9 +40,9 @@ function Footer() {
             GitHub
           </a>
           <a
-            href="mailto:techbit.team@example.com"
+            href="mailto:nedovizt26@gmail.com"
             className="social-btn"
-            title="Написати на пошту"
+            title="Написати на пошту команди TechBIT"
           >
             Email
           </a>
