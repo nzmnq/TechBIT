@@ -1,0 +1,20 @@
+(kicad_sch
+  (version 20231120)
+  (generator "eeschema")
+  (generator_version "10.0")
+  (uuid "168c4324-41db-4eb6-a927-13bc9ec7285e")
+  (paper "A4")
+  (title_block
+    (title "Wheel Piezo Charge Amplifier + ESP32-C3 + CAN + GY-SHT40 Waterproof Temp Sensor")
+    (date "2026-11-07")
+    (rev "3.0-LUT-1Layer")
+    (company "Wheel Telemetry Module")
+  )
+  (lib_symbols)
+  (text "COMPLETE SINGLE-LAYER (B.Cu) WHEEL TELEMETRY MODULE\n\nTOP SIDE (F.Cu - THT & Modules):\n- U2: ESP32-C3 SuperMini (Pin 16=5V, Pin 15=GND, Pin 14=3V3, Pin 11=GPIO2/ADC, Pin 8=GPIO21/CAN_TX, Pin 7=GPIO20/CAN_RX, Pin 5=GPIO9/SCL, Pin 4=GPIO8/SDA)\n- U1: MCP6002-I/P Dual Rail-to-Rail Op-Amp in DIP-8 Socket\n- MOD1: Mini360 DC-DC Buck Converter (12V -> 5.0V)\n- MOD2: SN65HVD230 CAN Bus Transceiver Module (3.3V)\n- J1: KF301-2P (5.08mm) Piezo Sensor Input (Pin 1=PIEZO+, Pin 2=GND)\n- J2: KF301-4P (5.08mm) Vehicle Bus (Pin 1=+12V, Pin 2=GND, Pin 3=CAN_L, Pin 4=CAN_H)\n- J3: JST-XH 4P (B4B-XH-A) Waterproof Temp Sensor GY-SHT40 (Pin 1=3V3, Pin 2=GND, Pin 3=SDA, Pin 4=SCL)\n- R1: 10k THT | R2: 100k THT | R3: 100k THT | R5: 100R THT | C5: 10uF Electrolytic THT\n\nBOTTOM SIDE (B.Cu - SMD on Copper Layer):\n- D1: BAT54S (SOT-23) Dual Series Schottky Clamp Diode\n- C1: 1nF (0805) Input Coupling Capacitor\n- C2: 330pF NP0 (0805) Feedback Capacitor, gain K=3\n- R4: 4.7M (1206) Charge Integrator Bleed Resistor\n- C3: 100nF (1206) Op-Amp VDD Decoupling Capacitor\n- C4: 100nF (1206) ADC Anti-Aliasing Low-Pass Filter Capacitor"
+    (exclude_from_sim no)
+    (at 25.4 45.0 0)
+    (effects (font (size 2.2 2.2) (thickness 0.3)) (justify left top))
+    (uuid "52b3bf58-f152-43d3-94e5-11b62aa624e1")
+  )
+)
