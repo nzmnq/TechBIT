@@ -30,7 +30,9 @@
 2. **Датчик температури/вологості `GY-SHT40` (`0x44`, роз'єм `J3`):** `GPIO8 = SDA`, `GPIO9 = SCL` (неблокуючий I2C-драйвер [Sht40Sensor.h](../esp-code/include/Sht40Sensor.h) із перевіркою CRC-8).
 3. **Критичний нюанс `GPIO8` на `ESP32-C3 SuperMini`:** вбудований синій світлодіод на платі підключений до `GPIO8` — **того ж піна, що і `I2C_SDA`**. У прошивці при `ENABLE_SHT40=1` блимання цього світлодіода повністю вимкнено, щоб не ламати шину I2C.
 4. **USB-C Serial на `ESP32-C3 SuperMini`:** у [platformio.ini](../esp-code/platformio.ini) обов'язково задані прапорці `-DARDUINO_USB_MODE=1 -DARDUINO_USB_CDC_ON_BOOT=1`, інакше `Serial` не виводить дані у вбудований USB-C порт.
-5. **CAN-шина (`SN65HVD230`):** `GPIO21 = TX`, `GPIO20 = RX` (`500 kbps`).
+5. **CAN-шина (`SN65HVD230`, 500 kbps):**
+   - Колісні вузли (`ESP32-C3`): `GPIO21 = TX`, `GPIO20 = RX`.
+   - Центральний хаб (`ESP32-S3`): `GPIO4 = TX`, `GPIO5 = RX` (`GPIO19/20` вільні під апаратний USB D-/D+, кнопка `BOOT` — `GPIO0`).
 
 ---
 
@@ -44,10 +46,10 @@ npm start   # запуск на http://localhost:5050
 ```
 Відкрийте **`http://localhost:5050`** у **Google Chrome** або **Microsoft Edge** (потрібно для Web Serial API).
 
-### Крок 2. Прошивка ESP32-C3
+### Крок 2. Прошивка вузлів у PlatformIO
 Відкрийте папку `esp-code` у PlatformIO (VS Code) та оберіть середовище:
-- `wheel_fl` / `wheel_fr` / `wheel_rl` / `wheel_rr` — окремий колісний вузол (`JSON` по USB Serial увімкнений одразу);
-- `central_hub_c3` — центральний блок на `ESP32-C3` (приймає до 4 коліс по CAN).
+- `wheel_fl` / `wheel_fr` / `wheel_rl` / `wheel_rr` — окремий колісний вузол (`ESP32-C3 SuperMini`, `JSON` по USB Serial увімкнений одразу);
+- `central_hub` — центральний блок на `ESP32-S3` (приймає до 4 коліс по CAN).
 
 ### Крок 3. Підключення ESP32-C3 до стенду (3 варіанти)
 1. **Через USB-C (найшвидше на столі):**
