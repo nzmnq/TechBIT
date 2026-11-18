@@ -7,7 +7,7 @@
 
 namespace techbit {
 
-// Stores and restores calibrated per-wheel baseline RMS values in ESP32-C3 NVS Flash
+// Stores and restores calibrated per-wheel baseline RMS values in ESP32-S3 NVS Flash
 // so vehicle calibration persists across ACC ignition OFF/ON cycles.
 class NvsCalibration {
 public:

@@ -122,7 +122,7 @@ void printHumanDashboard(const ml::SystemSummary& sum) {
     else if (sum.alertLevel == ml::ALERT_WARNING) alertStr = "WARNING_ACCUM";
     else if (sum.alertLevel == ml::ALERT_BAD_ROAD) alertStr = "BAD_ROAD_FILTERED";
 
-    Serial.printf("[HUB C3] Active:%u Offline:0x%X DeadPiezo:0x%X Road:%s Status:%s%s",
+    Serial.printf("[HUB] Active:%u Offline:0x%X DeadPiezo:0x%X Road:%s Status:%s%s",
                   sum.activeWheelCount,
                   sum.offlineWheelMask,
                   sum.deadSensorMask,
@@ -180,7 +180,7 @@ void printCsvTelemetry() {
 void buildHubJson(const ml::SystemSummary& sum, char* out, size_t outCap) {
     int pos = std::snprintf(
         out, outCap,
-        "{\"type\":\"techbit_hub\",\"mcu\":\"ESP32-C3\",\"tsMs\":%lu,"
+        "{\"type\":\"techbit_hub\",\"mcu\":\"ESP32-S3\",\"tsMs\":%lu,"
         "\"active\":%u,\"offlineMask\":%u,\"deadMask\":%u,\"road\":\"%s\","
         "\"alert\":%u,\"faultMask\":%u,\"muted\":%s,\"cal\":%s,\"calPct\":%u,"
         "\"canRx\":%lu,\"canTx\":%lu,\"canBusOff\":%lu,\"wheels\":[",
@@ -262,7 +262,7 @@ void buildHubJson(const ml::SystemSummary& sum, char* out, size_t outCap) {
 }
 
 void printStatusInfo() {
-    Serial.println("\n=== TechBIT Central Hub Status (ESP32-C3 SuperMini) ===");
+    Serial.println("\n=== TechBIT Central Hub Status (ESP32-S3) ===");
     Serial.printf("CAN RX frames: %lu | TX frames: %lu | Bus-Off recoveries: %lu\n",
                   static_cast<unsigned long>(g_can.rxCount()),
                   static_cast<unsigned long>(g_can.txCount()),
@@ -330,7 +330,7 @@ void setup() {
     Serial.begin(115200);
     delay(400);
 
-    Serial.println("\n=== TechBIT Central Analytics Hub (ESP32-C3 SuperMini) ===");
+    Serial.println("\n=== TechBIT Central Analytics Hub (ESP32-S3) ===");
 
     g_classifier.init();
     g_classifier.setStartupBlanking(kStartupBlankingMs);
@@ -351,7 +351,7 @@ void setup() {
     g_webBridge.begin(TECHBIT_SERIAL_DEFAULT_JSON ? SERIAL_MODE_JSON : SERIAL_MODE_HUMAN);
 
     g_canRxQueue = xQueueCreate(48, sizeof(CanFrame));
-    xTaskCreate(canRxTask, "can_rx_task", 4096, nullptr, 3, nullptr);
+    xTaskCreatePinnedToCore(canRxTask, "can_rx_task", 4096, nullptr, 3, nullptr, 0);
 
     printStatusInfo();
 }
@@ -372,7 +372,7 @@ void loop() {
         }
     }
 
-    // 2. Smart BOOT button (GPIO9 on ESP32-C3 SuperMini)
+    // 2. Smart BOOT button (GPIO0 on ESP32-S3)
     const bool isDownNow = (digitalRead(PIN_BTN_CALIBRATE) == LOW);
     if (isDownNow && !g_btnPressed && (nowMs - g_btnDownMs > 80U)) {
         g_btnPressed     = true;

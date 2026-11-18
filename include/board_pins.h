@@ -36,16 +36,18 @@ static constexpr bool STATUS_LED_ACTIVE_LOW = true;
 
 #elif defined(TECHBIT_ROLE_CENTRAL)
 
-// ---- ESP32-C3 SuperMini (Central Hub / Analytics Controller) ----
+// ---- ESP32-S3 (Central Hub / Analytics Controller) ----
+// Safe GPIOs avoiding Octal Flash/PSRAM pins (GPIO26..37) and USB D-/D+ (GPIO19..20).
+
 // TWAI (CAN Bus) -> SN65HVD230 Transceiver
-static constexpr int PIN_CAN_TX          = 21;  // GPIO21 -> SN65HVD230 D (TXD)
-static constexpr int PIN_CAN_RX          = 20;  // GPIO20 <- SN65HVD230 R (RXD)
+static constexpr int PIN_CAN_TX          = 4;   // GPIO4 -> SN65HVD230 D (TXD)
+static constexpr int PIN_CAN_RX          = 5;   // GPIO5 <- SN65HVD230 R (RXD)
 
 // Driver Warning Outputs (Dashboard Indicator & Buzzer)
-static constexpr int PIN_BUZZER_ALERT    = 4;   // GPIO4 -> Active buzzer / relay trigger (HIGH = alert)
-static constexpr int PIN_LED_FAULT       = 5;   // GPIO5 -> Red "Check Service / ТО" warning LED
-static constexpr int PIN_LED_OK          = 6;   // GPIO6 -> Green "System Normal" LED
-static constexpr int PIN_BTN_CALIBRATE   = 9;   // GPIO9 (BOOT button on ESP32-C3 SuperMini) -> Hold 1.5s to calibrate
+static constexpr int PIN_BUZZER_ALERT    = 6;   // GPIO6 -> Active buzzer / relay trigger (HIGH = alert)
+static constexpr int PIN_LED_FAULT       = 7;   // GPIO7 -> Red "Check Service / ТО" warning LED
+static constexpr int PIN_LED_OK          = 15;  // GPIO15 -> Green "System Normal" LED
+static constexpr int PIN_BTN_CALIBRATE   = 0;   // GPIO0 (BOOT button on ESP32-S3) -> Hold 1.5s to calibrate
 
 // Optional ACC Ignition Voltage Sense (via resistor divider 12V/24V -> max 3.3V)
 static constexpr int PIN_ACC_SENSE       = 1;   // GPIO1 (optional ignition monitor)
