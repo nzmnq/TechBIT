@@ -4,13 +4,23 @@
 
 #include "AdcDmaSampler.h"
 #include "CanBusManager.h"
+#include "Sht40Sensor.h"
 #include "VibrationDSP.h"
+#include "WebTelemetryBridge.h"
 #include "board_pins.h"
 #include "can_protocol.h"
 #include "techbit_config.h"
 
 #ifndef WHEEL_NODE_ID
 #define WHEEL_NODE_ID 0
+#endif
+
+#ifndef ENABLE_SHT40
+#define ENABLE_SHT40 1
+#endif
+
+#ifndef TECHBIT_SERIAL_DEFAULT_JSON
+#define TECHBIT_SERIAL_DEFAULT_JSON 1
 #endif
 
 using namespace techbit;
@@ -20,6 +30,8 @@ namespace {
 AdcDmaSampler       g_adc;
 dsp::VibrationDSP   g_dsp;
 CanBusManager       g_can;
+Sht40Sensor         g_sht40;
+WebTelemetryBridge  g_webBridge;
 
 uint8_t             g_wheelId = WHEEL_NODE_ID;
 uint16_t            g_rawSamples[dsp::kDspFftSize];
@@ -37,6 +49,9 @@ float               g_accTonality      = 0.0f;
 float               g_bestDominantFreq = 0.0f;
 float               g_bestFrameRms     = -1.0f;
 bool                g_accSurgeClip     = false;
+float               g_lastDcOffsetMv   = 1650.0f;
+float               g_lastZeroCrossHz  = 0.0f;
+float               g_bestSpectrum32[32] = {};
 
 uint32_t            g_lastPrintMs      = 0;
 uint32_t            g_lastBlinkMs      = 0;
@@ -45,12 +60,13 @@ bool                g_hubCalibAck      = false;
 uint32_t            g_calibAckUntilMs  = 0;
 
 void setStatusLed(bool on) {
+#if !ENABLE_SHT40
+    // Onboard blue LED on ESP32-C3 SuperMini shares GPIO8 with I2C SDA; only use when SHT40 is off.
     g_ledState = on;
-    if (STATUS_LED_ACTIVE_LOW) {
-        digitalWrite(PIN_STATUS_LED, on ? LOW : HIGH);
-    } else {
-        digitalWrite(PIN_STATUS_LED, on ? HIGH : LOW);
-    }
+    digitalWrite(PIN_STATUS_LED, (STATUS_LED_ACTIVE_LOW ? !on : on) ? HIGH : LOW);
+#else
+    (void)on;
+#endif
 }
 
 uint8_t resolveWheelId() {
@@ -64,6 +80,11 @@ uint8_t resolveWheelId() {
         uint8_t bit0 = (digitalRead(PIN_ID_BIT0) == LOW) ? 1U : 0U;
         uint8_t bit1 = (digitalRead(PIN_ID_BIT1) == LOW) ? 1U : 0U;
         return static_cast<uint8_t>((bit1 << 1) | bit0);
+    }
+
+    int8_t savedId = WebTelemetryBridge::loadSavedWheelId();
+    if (savedId >= 0) {
+        return static_cast<uint8_t>(savedId);
     }
 
     return static_cast<uint8_t>(WHEEL_NODE_ID & 0x03);
@@ -98,6 +119,7 @@ void resetWindowAccumulator() {
     g_bestDominantFreq = 0.0f;
     g_bestFrameRms     = -1.0f;
     g_accSurgeClip     = false;
+    std::memset(g_bestSpectrum32, 0, sizeof(g_bestSpectrum32));
 }
 
 void pollCanCommands() {
@@ -112,18 +134,60 @@ void pollCanCommands() {
     }
 }
 
+void processBridgeCommands() {
+    char cmd[WebTelemetryBridge::kCmdLineMax];
+    while (g_webBridge.pollCommand(cmd, sizeof(cmd))) {
+        if (std::strncmp(cmd, "wheel ", 6) == 0) {
+            int newId = std::atoi(cmd + 6);
+            if (newId >= 0 && newId < WHEEL_COUNT) {
+                g_wheelId = static_cast<uint8_t>(newId);
+                WebTelemetryBridge::saveWheelId(g_wheelId);
+                Serial.printf("[TechBIT Wheel] Active wheel ID set to %s (%u)\n",
+                              wheelName(g_wheelId), g_wheelId);
+            }
+        } else if (std::strcmp(cmd, "status") == 0 || std::strcmp(cmd, "help") == 0) {
+            Serial.printf("\n[TechBIT Wheel %s] MCU=ESP32-C3 ADC=GPIO%d Vref=%.1fmV CAN(TX=%d,RX=%d) ok=%s tx=%lu rx=%lu err=%lu\n",
+                          wheelName(g_wheelId),
+                          PIN_PIEZO_ADC,
+                          g_lastDcOffsetMv,
+                          PIN_CAN_TX,
+                          PIN_CAN_RX,
+                          g_can.isReady() ? "YES" : "NO",
+                          static_cast<unsigned long>(g_can.txCount()),
+                          static_cast<unsigned long>(g_can.rxCount()),
+                          static_cast<unsigned long>(g_can.txErrors()));
+#if ENABLE_SHT40
+            Serial.printf("[TechBIT Wheel %s] GY-SHT40(SDA=%d,SCL=%d,0x%02X): valid=%s T=%.2fC RH=%.1f%% ok=%lu err=%lu\n",
+                          wheelName(g_wheelId),
+                          PIN_I2C_SDA,
+                          PIN_I2C_SCL,
+                          SHT40_I2C_ADDR,
+                          g_sht40.isValid() ? "YES" : "NO",
+                          g_sht40.tempC(),
+                          g_sht40.humidityPct(),
+                          static_cast<unsigned long>(g_sht40.okCount()),
+                          static_cast<unsigned long>(g_sht40.errCount()));
+#endif
+            g_webBridge.printNetworkStatus();
+            Serial.println("Commands: json | human | rate <ms> | wheel <0..3> | wifi <ssid> <pass> <url> | wifi_ap | wifi_off | status\n");
+        }
+    }
+}
+
 } // namespace
 
 void setup() {
+#if !ENABLE_SHT40
     pinMode(PIN_STATUS_LED, OUTPUT);
     setStatusLed(false);
+#endif
 
     Serial.begin(115200);
     delay(400);
 
     g_wheelId = resolveWheelId();
 
-    Serial.printf("\n[TechBIT Wheel Node] Booting corner=%s (ID=%u)\n",
+    Serial.printf("\n[TechBIT Wheel Node] Booting ESP32-C3 SuperMini corner=%s (ID=%u)\n",
                   wheelName(g_wheelId), g_wheelId);
 
     int ntcPin = -1;
@@ -134,18 +198,33 @@ void setup() {
     if (!g_adc.begin(PIN_PIEZO_ADC, kSampleRateHz, ntcPin)) {
         Serial.println("[TechBIT Wheel] ERROR: Failed to start 20 kSPS DMA ADC!");
     } else {
-        Serial.printf("[TechBIT Wheel] DMA ADC active @ %lu Hz (%.4f mV/count)\n",
-                      static_cast<unsigned long>(kSampleRateHz), g_adc.mvPerCount());
+        Serial.printf("[TechBIT Wheel] DMA ADC active on GPIO%d @ %lu Hz (%.4f mV/count)\n",
+                      PIN_PIEZO_ADC,
+                      static_cast<unsigned long>(kSampleRateHz),
+                      g_adc.mvPerCount());
     }
 
     g_dsp.begin(static_cast<float>(kSampleRateHz), g_adc.mvPerCount());
 
+#if ENABLE_SHT40
+    if (g_sht40.begin(PIN_I2C_SDA, PIN_I2C_SCL, SHT40_I2C_ADDR, 500)) {
+        Serial.printf("[TechBIT Wheel] GY-SHT40 detected on SDA=GPIO%d SCL=GPIO%d (0x%02X)\n",
+                      PIN_I2C_SDA, PIN_I2C_SCL, SHT40_I2C_ADDR);
+    } else {
+        Serial.printf("[TechBIT Wheel] WARN: GY-SHT40 not ACKed yet on SDA=GPIO%d SCL=GPIO%d (0x%02X) — will keep polling\n",
+                      PIN_I2C_SDA, PIN_I2C_SCL, SHT40_I2C_ADDR);
+    }
+#endif
+
     if (!g_can.begin(PIN_CAN_TX, PIN_CAN_RX)) {
         Serial.println("[TechBIT Wheel] ERROR: Failed to initialize TWAI CAN @ 500 kbps!");
     } else {
-        Serial.printf("[TechBIT Wheel] CAN TWAI active @ 500 kbps (TX=%d, RX=%d)\n",
+        Serial.printf("[TechBIT Wheel] CAN TWAI active @ 500 kbps (TX=GPIO%d, RX=GPIO%d)\n",
                       PIN_CAN_TX, PIN_CAN_RX);
     }
+
+    g_webBridge.begin(TECHBIT_SERIAL_DEFAULT_JSON ? SERIAL_MODE_JSON : SERIAL_MODE_HUMAN);
+    g_webBridge.printNetworkStatus();
 
     resetWindowAccumulator();
 }
@@ -153,16 +232,24 @@ void setup() {
 void loop() {
     const uint32_t nowMs = millis();
 
+#if ENABLE_SHT40
+    g_sht40.update(nowMs);
+#endif
+
     // 1. Read 512 samples @ 20 kSPS via hardware DMA (~25.6 ms)
     if (!g_adc.readFrame(g_rawSamples, dsp::kDspFftSize, 80)) {
         g_can.serviceRecovery();
         pollCanCommands();
+        processBridgeCommands();
         return;
     }
 
     // 2. Compute Time-Domain & Fourier Series (512-pt FFT) features
     const dsp::VibrationFeatures feat = g_dsp.processRawFrame(
         g_rawSamples, kAdcSurgeLowThresh, kAdcSurgeHighThresh);
+
+    g_lastDcOffsetMv  = feat.dcOffsetMv;
+    g_lastZeroCrossHz = feat.zeroCrossingsHz;
 
     // 3. Accumulate across 2 frames (~51.2 ms CAN reporting cadence)
     g_accRmsSq      += feat.rmsMv * feat.rmsMv;
@@ -178,11 +265,15 @@ void loop() {
     if (feat.rmsMv > g_bestFrameRms) {
         g_bestFrameRms     = feat.rmsMv;
         g_bestDominantFreq = feat.dominantFreqHz;
+        downsampleSpectrum32(g_dsp.spectrumMagnitudesMv(),
+                             dsp::kDspHalfSize,
+                             static_cast<float>(kSampleRateHz),
+                             g_bestSpectrum32);
     }
 
     ++g_frameCounter;
 
-    // 4. Publish compact CAN frames when aggregation window completes
+    // 4. Publish compact CAN frames & update Web Telemetry snapshot
     if (g_frameCounter >= kFramesPerCanReport) {
         const float invN = 1.0f / static_cast<float>(g_frameCounter);
 
@@ -206,10 +297,24 @@ void loop() {
             flags |= can::FLAG_HIGH_ENERGY;
         }
 
+        float tempC       = 0.0f;
+        float humidityPct = 0.0f;
+        bool  sht40Ok     = false;
+
+#if ENABLE_SHT40
+        if (g_sht40.isValid()) {
+            tempC       = g_sht40.tempC();
+            humidityPct = g_sht40.humidityPct();
+            sht40Ok     = true;
+            pkt.tempC   = tempC;
+            flags      |= can::FLAG_TEMP_VALID;
+        }
+#endif
 #ifdef ENABLE_NTC_TEMP
-        if (g_adc.hasNtc()) {
+        if (!sht40Ok && g_adc.hasNtc()) {
             pkt.tempC = computeNtcTempC(g_adc.latestNtcRaw());
-            flags |= can::FLAG_TEMP_VALID;
+            tempC     = pkt.tempC;
+            flags    |= can::FLAG_TEMP_VALID;
         }
 #endif
         pkt.statusFlags = flags;
@@ -222,11 +327,40 @@ void loop() {
         g_can.sendFrame(can::kCanIdCoreBase + g_wheelId, coreBuf, 8);
         g_can.sendFrame(can::kCanIdSpectralBase + g_wheelId, specBuf, 8);
 
-        // Periodic human/plotter serial telemetry (every 250 ms)
-        if (nowMs - g_lastPrintMs >= 250U) {
+        NodeWebSnapshot snap{};
+        snap.wheelId            = g_wheelId;
+        snap.tsMs               = nowMs;
+        snap.rmsMv              = pkt.rmsMv;
+        snap.peakMv             = pkt.peakMv;
+        snap.dcOffsetMv         = g_lastDcOffsetMv;
+        snap.crestFactor        = (pkt.rmsMv > 0.5f) ? (pkt.peakMv / pkt.rmsMv) : 1.0f;
+        snap.kurtosis           = pkt.kurtosis;
+        snap.bandLowRatio       = pkt.bandLowRatio;
+        snap.bandMidRatio       = pkt.bandMidRatio;
+        snap.bandHighRatio      = pkt.bandHighRatio;
+        snap.dominantFreqHz     = pkt.dominantFreqHz;
+        snap.spectralCentroidHz = pkt.spectralCentroidHz;
+        snap.tonalityRatio      = pkt.tonalityRatio;
+        snap.zeroCrossingsHz    = g_lastZeroCrossHz;
+        snap.surgeClipping      = g_accSurgeClip;
+        snap.tempC              = tempC;
+        snap.humidityPct        = humidityPct;
+        snap.sht40Ok            = sht40Ok;
+        snap.canReady           = g_can.isReady();
+        snap.canTx              = g_can.txCount();
+        snap.canRx              = g_can.rxCount();
+        snap.canErr             = g_can.txErrors();
+        snap.canBusOff          = g_can.busOffRecoveries();
+        snap.adcDropped         = g_adc.droppedBytes();
+        std::memcpy(snap.spectrumBins, g_bestSpectrum32, sizeof(snap.spectrumBins));
+
+        g_webBridge.publishNodeSnapshot(snap, nowMs);
+
+        // Periodic human-readable serial telemetry (only when serialMode == SERIAL_MODE_HUMAN)
+        if (g_webBridge.serialMode() == SERIAL_MODE_HUMAN && (nowMs - g_lastPrintMs >= 250U)) {
             g_lastPrintMs = nowMs;
             Serial.printf(
-                "Wheel:%s RMS:%.1fmV Peak:%.1fmV fDom:%uHz fCent:%uHz Band[L:%.2f M:%.2f H:%.2f] Ton:%.2f Kurt:%.2f Vref:%.0fmV CAN_TX:%lu\n",
+                "Wheel:%s RMS:%.1fmV Peak:%.1fmV fDom:%uHz fCent:%uHz Band[L:%.2f M:%.2f H:%.2f] Ton:%.2f Kurt:%.2f Vref:%.0fmV T:%.1fC RH:%.0f%% CAN_TX:%lu\n",
                 wheelName(g_wheelId),
                 pkt.rmsMv,
                 pkt.peakMv,
@@ -237,15 +371,18 @@ void loop() {
                 pkt.bandHighRatio,
                 pkt.tonalityRatio,
                 pkt.kurtosis,
-                feat.dcOffsetMv,
+                g_lastDcOffsetMv,
+                tempC,
+                humidityPct,
                 static_cast<unsigned long>(g_can.txCount()));
         }
 
         resetWindowAccumulator();
     }
 
-    // 5. Service CAN commands, bus-off recovery & heartbeat LED
+    // 5. Service CAN commands, Web/Serial commands, bus-off recovery & heartbeat LED
     pollCanCommands();
+    processBridgeCommands();
     g_can.serviceRecovery();
 
     if (g_hubCalibAck && nowMs > g_calibAckUntilMs) {
