@@ -1,0 +1,11 @@
+{
+  "name": "techbit-test-web-interface",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Engineering diagnostic, FFT spectrum analysis, TinyML tuning & hardware test bench for TechBIT (ESP32-C3 SuperMini)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_truthfulness.js"
+  }
+}
