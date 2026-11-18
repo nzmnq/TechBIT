@@ -157,11 +157,15 @@ void processBridgeCommands() {
                           static_cast<unsigned long>(g_can.rxCount()),
                           static_cast<unsigned long>(g_can.txErrors()));
 #if ENABLE_SHT40
-            Serial.printf("[TechBIT Wheel %s] GY-SHT40(SDA=%d,SCL=%d,0x%02X): valid=%s T=%.2fC RH=%.1f%% ok=%lu err=%lu\n",
+            Serial.printf("[TechBIT Wheel %s] GY-SHT40(SDA=%d,SCL=%d,%s,0x%02X,%s,scan=0x%02X,lastErr=%u): valid=%s T=%.2fC RH=%.1f%% ok=%lu err=%lu\n",
                           wheelName(g_wheelId),
-                          PIN_I2C_SDA,
-                          PIN_I2C_SCL,
-                          SHT40_I2C_ADDR,
+                          g_sht40.activeSdaPin(),
+                          g_sht40.activeSclPin(),
+                          g_sht40.pinsSwapped() ? "SWAPPED" : "NORMAL",
+                          g_sht40.activeAddress(),
+                          g_sht40.protocolName(),
+                          g_sht40.scanFoundAddress(),
+                          static_cast<unsigned>(g_sht40.lastError()),
                           g_sht40.isValid() ? "YES" : "NO",
                           g_sht40.tempC(),
                           g_sht40.humidityPct(),
@@ -208,11 +212,14 @@ void setup() {
 
 #if ENABLE_SHT40
     if (g_sht40.begin(PIN_I2C_SDA, PIN_I2C_SCL, SHT40_I2C_ADDR, 500)) {
-        Serial.printf("[TechBIT Wheel] GY-SHT40 detected on SDA=GPIO%d SCL=GPIO%d (0x%02X)\n",
-                      PIN_I2C_SDA, PIN_I2C_SCL, SHT40_I2C_ADDR);
+        Serial.printf("[TechBIT Wheel] GY-SHT40 detected on SDA=GPIO%d SCL=GPIO%d (%s, 0x%02X)\n",
+                      g_sht40.activeSdaPin(),
+                      g_sht40.activeSclPin(),
+                      g_sht40.pinsSwapped() ? "AUTO-SWAPPED" : "NORMAL",
+                      g_sht40.activeAddress());
     } else {
-        Serial.printf("[TechBIT Wheel] WARN: GY-SHT40 not ACKed yet on SDA=GPIO%d SCL=GPIO%d (0x%02X) — will keep polling\n",
-                      PIN_I2C_SDA, PIN_I2C_SCL, SHT40_I2C_ADDR);
+        Serial.printf("[TechBIT Wheel] WARN: GY-SHT40 not ACKed on GPIO8/9 (0x44/0x45, scan=0x%02X) — auto-probing normal+swapped pins\n",
+                      g_sht40.scanFoundAddress());
     }
 #endif
 
