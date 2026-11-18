@@ -15,11 +15,28 @@ let csvRecording = false;
 const csvRows = [];
 const lastRecordedRxCounts = [0, 0, 0, 0];
 
-// Web Serial state
-let serialPort = null;
-let serialReader = null;
-let serialWriter = null;
-let serialKeepReading = false;
+// Web Serial state (2 concurrent USB ports)
+function createSerialSlot(idx) {
+  return {
+    idx,
+    port: null,
+    reader: null,
+    writer: null,
+    keepReading: false,
+    rxPackets: 0,
+    lastRawWheelId: null,
+    lastWheelName: null,
+    mapMode: 'auto',
+    btnId: idx === 0 ? 'btn-web-serial' : 'btn-web-serial-2',
+    statusId: idx === 0 ? 'serial-status-text' : 'serial-status-text-2',
+    badgeId: idx === 0 ? 'port-badge-1' : 'port-badge-2',
+    mapId: idx === 0 ? 'port-wheel-map-1' : 'port-wheel-map-2',
+    label: `USB Порт ${idx + 1}`,
+    logTag: `USB${idx + 1}`,
+  };
+}
+
+const serialSlots = [createSerialSlot(0), createSerialSlot(1)];
 const consoleLines = [];
 
 function pushConsole(tag, text) {
@@ -44,23 +61,34 @@ async function apiPost(path, body) {
 
 async function sendCommand(action, extra = {}) {
   const res = await apiPost('/api/command', { action, ...extra });
-  if (serialWriter && (action === 'cal' || action === 'reset' || action === 'mute')) {
-    await writeSerialLine(action);
+  if (action === 'cal' || action === 'reset' || action === 'mute') {
+    await writeSerialLine(action, 'all');
   }
   return res;
 }
 
-async function writeSerialLine(line) {
-  if (!serialWriter) return false;
+async function writeSerialSlot(slotIdx, line) {
+  const slot = serialSlots[slotIdx];
+  if (!slot || !slot.writer) return false;
   try {
     const encoder = new TextEncoder();
-    await serialWriter.write(encoder.encode(`${line.trim()}\n`));
-    pushConsole('TX->USB', line.trim());
+    await slot.writer.write(encoder.encode(`${line.trim()}\n`));
+    pushConsole(`TX->${slot.logTag}`, line.trim());
     return true;
   } catch (err) {
-    pushConsole('USB ERR', err.message);
+    pushConsole(`${slot.logTag} ERR`, err.message);
     return false;
   }
+}
+
+async function writeSerialLine(line, target = 'all') {
+  if (target === '0' || target === 0) return writeSerialSlot(0, line);
+  if (target === '1' || target === 1) return writeSerialSlot(1, line);
+  const results = await Promise.all([
+    serialSlots[0].writer ? writeSerialSlot(0, line) : Promise.resolve(false),
+    serialSlots[1].writer ? writeSerialSlot(1, line) : Promise.resolve(false),
+  ]);
+  return results.some(Boolean);
 }
 
 // ---- Tabs (modern-web-guidance: tabs) ----
@@ -131,63 +159,104 @@ function initTabs() {
   }
 }
 
-// ---- Web Serial (115200 baud direct USB-C connection to ESP32-C3) ----
-async function toggleWebSerial() {
-  const btn = document.getElementById('btn-web-serial');
-  const statusEl = document.getElementById('serial-status-text');
+// ---- Web Serial (115200 baud direct USB-C connection to up to 2 ESP32-C3 boards) ----
+function setSlotUiDisconnected(slot, statusText = 'Не підключено') {
+  const btn = document.getElementById(slot.btnId);
+  const statusEl = document.getElementById(slot.statusId);
+  const badgeEl = document.getElementById(slot.badgeId);
+  if (btn) btn.textContent = `Підключити ${slot.label}`;
+  if (statusEl) statusEl.textContent = statusText;
+  if (badgeEl) badgeEl.classList.remove('port-live');
+}
 
-  if (serialPort) {
-    serialKeepReading = false;
-    try {
-      if (serialReader) await serialReader.cancel();
-      if (serialWriter) serialWriter.releaseLock();
-      await serialPort.close();
-    } catch (_) {}
-    serialPort = null;
-    serialReader = null;
-    serialWriter = null;
-    btn.textContent = 'Підключити USB Serial';
-    statusEl.textContent = 'Відключено';
-    pushConsole('USB', 'COM-порт закрито');
+async function closeSerialSlot(slotIdx, reasonText = 'Не підключено') {
+  const slot = serialSlots[slotIdx];
+  slot.keepReading = false;
+  try {
+    if (slot.reader) await slot.reader.cancel();
+  } catch (_) {}
+  try {
+    if (slot.writer) slot.writer.releaseLock();
+  } catch (_) {}
+  try {
+    if (slot.port) await slot.port.close();
+  } catch (_) {}
+  slot.port = null;
+  slot.reader = null;
+  slot.writer = null;
+  slot.rxPackets = 0;
+  slot.lastRawWheelId = null;
+  slot.lastWheelName = null;
+  setSlotUiDisconnected(slot, reasonText);
+}
+
+async function toggleWebSerial(slotIdx) {
+  const slot = serialSlots[slotIdx];
+  const btn = document.getElementById(slot.btnId);
+  const statusEl = document.getElementById(slot.statusId);
+  const badgeEl = document.getElementById(slot.badgeId);
+
+  if (slot.port) {
+    await closeSerialSlot(slotIdx, 'Не підключено');
+    pushConsole(slot.logTag, 'COM-порт закрито');
     return;
   }
 
   if (!('serial' in navigator)) {
-    statusEl.textContent = 'Web Serial не підтримується цим браузером (потрібен Chrome або Edge)';
-    pushConsole('USB ERR', 'navigator.serial недоступний');
+    statusEl.textContent = 'Web Serial не підтримується (потрібен Chrome або Edge)';
+    pushConsole(`${slot.logTag} ERR`, 'navigator.serial недоступний');
     return;
   }
 
   try {
-    serialPort = await navigator.serial.requestPort();
-    await serialPort.open({ baudRate: 115200 });
-    serialKeepReading = true;
-    serialWriter = serialPort.writable.getWriter();
+    const requestedPort = await navigator.serial.requestPort();
+    const otherSlot = serialSlots[1 - slotIdx];
+    if (otherSlot.port === requestedPort) {
+      statusEl.textContent = `Цей порт вже відкритий у ${otherSlot.label}!`;
+      pushConsole(`${slot.logTag} ERR`, `Вибраний порт вже підключений як ${otherSlot.label}`);
+      return;
+    }
 
-    btn.textContent = 'Відключити USB Serial';
-    statusEl.textContent = 'Підключено @ 115200 baud (Live JSON)';
-    pushConsole('USB', 'Порт відкрито @ 115200 baud, перемикання на JSON...');
+    await requestedPort.open({ baudRate: 115200 });
+    slot.port = requestedPort;
+    slot.keepReading = true;
+    slot.rxPackets = 0;
+    slot.lastRawWheelId = null;
+    slot.lastWheelName = null;
+    slot.writer = slot.port.writable.getWriter();
 
-    await writeSerialLine('json');
-    readSerialLoop();
+    if (btn) btn.textContent = `Відключити ${slot.label}`;
+    if (statusEl) statusEl.textContent = 'Підключено @ 115200 (очікування...)';
+    if (badgeEl) badgeEl.classList.add('port-live');
+    pushConsole(slot.logTag, 'Порт відкрито @ 115200 baud, перемикання на JSON...');
+
+    await writeSerialSlot(slotIdx, 'json');
+    await writeSerialSlot(slotIdx, 'status');
+    readSerialLoop(slotIdx);
   } catch (err) {
-    serialPort = null;
-    statusEl.textContent = `Помилка: ${err.message}`;
-    pushConsole('USB ERR', err.message);
+    slot.port = null;
+    slot.writer = null;
+    setSlotUiDisconnected(slot, `Помилка: ${err.message}`);
+    pushConsole(`${slot.logTag} ERR`, err.message);
   }
 }
 
-async function readSerialLoop() {
+async function readSerialLoop(slotIdx) {
+  const slot = serialSlots[slotIdx];
   const decoder = new TextDecoderStream();
-  const inputDone = serialPort.readable.pipeTo(decoder.writable);
+  const inputDone = slot.port.readable.pipeTo(decoder.writable);
   const reader = decoder.readable.getReader();
-  serialReader = reader;
+  slot.reader = reader;
 
   let buffer = '';
+  let lostConnection = false;
   try {
-    while (serialKeepReading) {
+    while (slot.keepReading) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {
+        lostConnection = slot.keepReading;
+        break;
+      }
       if (!value) continue;
       buffer += value;
       let nlIdx;
@@ -198,29 +267,63 @@ async function readSerialLoop() {
         if (line.startsWith('{') && line.endsWith('}')) {
           try {
             const parsed = JSON.parse(line);
+            let autoRemapNote = '';
+            if (parsed.type !== 'techbit_hub' && parsed.wheelId !== undefined && parsed.wheelId !== null) {
+              const rawId = Number(parsed.wheelId);
+              slot.lastRawWheelId = rawId;
+              const otherSlot = serialSlots[1 - slotIdx];
+
+              if (slot.mapMode !== 'auto') {
+                const mappedId = Number(slot.mapMode);
+                parsed.wheelId = mappedId;
+                parsed.wheel = WHEEL_NAMES[mappedId];
+              } else if (
+                slotIdx === 1 &&
+                otherSlot.port &&
+                otherSlot.lastRawWheelId !== null &&
+                otherSlot.lastRawWheelId === rawId
+              ) {
+                const autoMappedId = (rawId + 1) % 4;
+                parsed.wheelId = autoMappedId;
+                parsed.wheel = WHEEL_NAMES[autoMappedId];
+                autoRemapNote = ` [Авто→${WHEEL_NAMES[autoMappedId]}]`;
+              }
+            }
+
+            slot.rxPackets += 1;
+            slot.lastWheelName = parsed.wheel || WHEEL_NAMES[parsed.wheelId] || 'HUB';
+            const statusEl = document.getElementById(slot.statusId);
+            if (statusEl) {
+              statusEl.textContent = `Live: ${slot.lastWheelName} • ${slot.rxPackets} pkt${autoRemapNote}`;
+            }
+
             const resp = await apiPost('/api/telemetry', { source: 'serial', payload: parsed });
             if (resp && Array.isArray(resp.commands)) {
               for (const cmd of resp.commands) {
-                await writeSerialLine(cmd);
+                await writeSerialSlot(slotIdx, cmd);
               }
             }
           } catch (e) {
-            pushConsole('JSON ERR', `${e.message}: ${line.slice(0, 80)}`);
+            pushConsole(`${slot.logTag} JSON ERR`, `${e.message}: ${line.slice(0, 80)}`);
           }
         } else {
-          pushConsole('ESP LOG', line);
+          pushConsole(`${slot.logTag} LOG`, line);
         }
       }
     }
   } catch (err) {
-    if (serialKeepReading) {
-      pushConsole('USB ERR', err.message);
+    if (slot.keepReading) {
+      lostConnection = true;
+      pushConsole(`${slot.logTag} ERR`, err.message);
     }
   } finally {
     try {
       reader.releaseLock();
       await inputDone.catch(() => {});
     } catch (_) {}
+    if (lostConnection) {
+      await closeSerialSlot(slotIdx, 'Відключено (USB витягнуто)');
+    }
   }
 }
 
@@ -703,8 +806,26 @@ function initEventStream() {
   };
 }
 
+function getTargetSerialPort() {
+  const sel = document.getElementById('esp-target-port');
+  return sel ? sel.value : 'all';
+}
+
 function bindControls() {
-  document.getElementById('btn-web-serial').addEventListener('click', toggleWebSerial);
+  document.getElementById('btn-web-serial').addEventListener('click', () => toggleWebSerial(0));
+  document.getElementById('btn-web-serial-2').addEventListener('click', () => toggleWebSerial(1));
+
+  serialSlots.forEach((slot) => {
+    const mapEl = document.getElementById(slot.mapId);
+    if (!mapEl) return;
+    mapEl.addEventListener('change', async (e) => {
+      slot.mapMode = e.target.value;
+      if (slot.port && slot.mapMode !== 'auto') {
+        await writeSerialSlot(slot.idx, `wheel ${slot.mapMode}`);
+      }
+    });
+  });
+
   document.getElementById('btn-cal').addEventListener('click', () => sendCommand('cal'));
   document.getElementById('btn-reset').addEventListener('click', () => sendCommand('reset'));
   document.getElementById('btn-mute').addEventListener('click', () => sendCommand('mute'));
@@ -800,8 +921,9 @@ function bindControls() {
   document.getElementById('btn-set-esp-wheel').addEventListener('click', async () => {
     const id = document.getElementById('esp-wheel-assign').value;
     const cmd = `wheel ${id}`;
+    const target = getTargetSerialPort();
     await sendCommand('esp_command', { rawCmd: cmd });
-    await writeSerialLine(cmd);
+    await writeSerialLine(cmd, target);
   });
 
   document.getElementById('wifi-provision-form').addEventListener('submit', async (e) => {
@@ -814,7 +936,8 @@ function bindControls() {
     }
     if (!ssid) return;
     const cmd = url ? `wifi ${ssid} ${pass} ${url}` : `wifi ${ssid} ${pass}`;
-    await writeSerialLine(cmd);
+    const target = getTargetSerialPort();
+    await writeSerialLine(cmd, target);
     await sendCommand('esp_command', { rawCmd: cmd });
   });
 
@@ -823,7 +946,8 @@ function bindControls() {
     const input = document.getElementById('raw-cmd-input');
     const cmd = input.value.trim();
     if (!cmd) return;
-    await writeSerialLine(cmd);
+    const target = getTargetSerialPort();
+    await writeSerialLine(cmd, target);
     await sendCommand('esp_command', { rawCmd: cmd });
     input.value = '';
   });

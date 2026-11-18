@@ -259,6 +259,53 @@ button:focus-visible,
   margin: 0;
 }
 
+.serial-ports-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.serial-port-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.port-badge {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #cbd5e1;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.port-badge.port-live {
+  background: #0f3a25;
+  color: #4ade80;
+  border-color: #166534;
+}
+
+.serial-port-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.79rem;
+}
+
+.port-map-select {
+  padding: 3px 6px;
+  font-size: 0.76rem;
+  flex-shrink: 0;
+}
+
 .single-line-url {
   display: block;
   font-size: 0.76rem;

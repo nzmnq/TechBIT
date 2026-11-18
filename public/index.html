@@ -45,7 +45,8 @@
       </div>
 
       <div class="verdict-actions">
-        <button type="button" id="btn-web-serial" class="btn btn-primary">Підключити USB Serial</button>
+        <button type="button" id="btn-web-serial" class="btn btn-primary">Підключити USB Порт 1</button>
+        <button type="button" id="btn-web-serial-2" class="btn btn-primary">Підключити USB Порт 2</button>
         <button type="button" id="btn-cal" class="btn btn-secondary">Калібрувати 5с (cal)</button>
         <button type="button" id="btn-reset" class="btn btn-secondary">Скинути тривоги (reset)</button>
         <button type="button" id="btn-mute" class="btn btn-secondary">Зумер (mute)</button>
@@ -56,8 +57,31 @@
     <!-- Connection & Simulator Control Strip -->
     <section class="connection-strip">
       <div class="conn-card">
-        <h2>1. USB-C Web Serial (пряме підключення)</h2>
-        <p id="serial-status-text" class="muted">Не підключено (115200 baud, Chrome / Edge)</p>
+        <h2>1. USB-C Web Serial (до 2 портів одночасно)</h2>
+        <div class="serial-ports-stack">
+          <div class="serial-port-row">
+            <span class="port-badge" id="port-badge-1">ПОРТ 1</span>
+            <span id="serial-status-text" class="muted serial-port-status">Не підключено</span>
+            <select id="port-wheel-map-1" class="port-map-select" title="Колесо для Порту 1">
+              <option value="auto">Авто ID</option>
+              <option value="0">0 — FL</option>
+              <option value="1">1 — FR</option>
+              <option value="2">2 — RL</option>
+              <option value="3">3 — RR</option>
+            </select>
+          </div>
+          <div class="serial-port-row">
+            <span class="port-badge" id="port-badge-2">ПОРТ 2</span>
+            <span id="serial-status-text-2" class="muted serial-port-status">Не підключено</span>
+            <select id="port-wheel-map-2" class="port-map-select" title="Колесо для Порту 2">
+              <option value="auto">Авто ID</option>
+              <option value="0">0 — FL</option>
+              <option value="1">1 — FR</option>
+              <option value="2">2 — RL</option>
+              <option value="3">3 — RR</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div class="conn-card">
@@ -277,6 +301,14 @@
               </form>
 
               <div class="esp-remote-box">
+                <div class="inline-row" style="margin-bottom: 8px;">
+                  <label for="esp-target-port">Цільовий USB-порт для команд:</label>
+                  <select id="esp-target-port">
+                    <option value="all">Обидва порти (Порт 1 + Порт 2)</option>
+                    <option value="0">Тільки USB Порт 1</option>
+                    <option value="1">Тільки USB Порт 2</option>
+                  </select>
+                </div>
                 <div class="inline-row">
                   <label for="esp-wheel-assign">Змінити ID підключеної плати (NVS):</label>
                   <select id="esp-wheel-assign">
