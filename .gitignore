@@ -14,4 +14,4 @@ firmware/.pio/
 .vscode/ipch/
 __pycache__/
 *.pyc
-
+.vscode
