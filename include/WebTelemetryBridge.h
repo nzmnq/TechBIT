@@ -266,7 +266,7 @@ public:
     // Load/save persistent Wheel ID override in NVS so a single test node can switch FL/FR/RL/RR live.
     static int8_t loadSavedWheelId() {
         Preferences prefs;
-        if (!prefs.begin("techbit_node", true)) return -1;
+        if (!prefs.begin("techbit_node", false)) return -1;
         int32_t val = prefs.getInt("wheel_id", -1);
         prefs.end();
         if (val >= 0 && val < WHEEL_COUNT) return static_cast<int8_t>(val);
@@ -296,7 +296,7 @@ private:
 #endif
 
         Preferences prefs;
-        if (prefs.begin("techbit_wifi", true)) {
+        if (prefs.begin("techbit_wifi", false)) {
             if (prefs.isKey("enabled")) {
                 wifiEnabled_ = prefs.getBool("enabled", wifiEnabled_);
             }

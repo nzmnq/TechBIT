@@ -13,7 +13,7 @@ class NvsCalibration {
 public:
     bool load(ml::WheelClassifier& classifier) {
         Preferences prefs;
-        if (!prefs.begin("techbit_cal", true)) {
+        if (!prefs.begin("techbit_cal", false)) {
             return false;
         }
 

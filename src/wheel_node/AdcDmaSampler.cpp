@@ -104,16 +104,18 @@ bool AdcDmaSampler::begin(int piezoGpioPin, uint32_t sampleRateHz, int ntcGpioPi
         return false;
     }
 
+    // In ESP-IDF 4.4 (Arduino-ESP32 2.x), ADC_UNIT_1 enum is 1, but
+    // adc_digi_pattern_config_t.unit uses a 0-based index (0 = ADC1, 1 = ADC2).
     adc_digi_pattern_config_t patterns[2] = {};
     patterns[0].atten     = ADC_ATTEN_DB_12;
     patterns[0].channel   = channel_;
-    patterns[0].unit      = ADC_UNIT_1;
+    patterns[0].unit      = 0;
     patterns[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
     if (ntcEnabled_) {
         patterns[1].atten     = ADC_ATTEN_DB_12;
         patterns[1].channel   = ntcChannel_;
-        patterns[1].unit      = ADC_UNIT_1;
+        patterns[1].unit      = 0;
         patterns[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
     }
 
