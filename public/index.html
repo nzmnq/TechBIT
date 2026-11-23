@@ -3,358 +3,754 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TechBIT — Діагностичний стенд ESP32-C3</title>
+  <title>TechBIT v2 — Стенд діагностики 10 коліс (C3 + Bridge + S3)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-brand">
-      <div class="brand-badge">TechBIT DIAG</div>
-      <div>
-        <h1>Інженерний стенд моніторингу та відладки (ESP32-C3 SuperMini)</h1>
-        <p class="subtitle">
-          АЦП 20 kSPS DMA (GPIO2) • FFT 512-pt • GY-SHT40 I2C 0x44 (GPIO8/9) • CAN 500 kbps (GPIO21/20) • TinyML MLP
-        </p>
-      </div>
-    </div>
-
-    <div class="topbar-status">
-      <span id="source-pill" class="pill pill-waiting">ОЧІКУВАННЯ ESP32-C3</span>
-      <span id="rate-pill" class="pill pill-muted">0 pkt/s</span>
-    </div>
-  </header>
-
-  <main class="container">
-    <!-- Warning Banner: only visible during Bench Simulator mode -->
-    <div id="sim-warning-banner" class="alert-banner alert-sim" hidden>
-      <strong>РЕЖИМ СТЕНДОВОЇ СИМУЛЯЦІЇ (НЕ ФІЗИЧНИЙ ДАТЧИК):</strong>
-      виводяться синтетичні тестові патерни (<span id="sim-banner-scenario">smooth</span>).
-      При надходженні реального пакета від ESP32-C3 симулятор автоматично вимкнеться.
-    </div>
-
-    <!-- Hardware / System Verdict Banner -->
-    <section class="verdict-bar" aria-live="polite">
-      <div class="verdict-main">
-        <span id="verdict-badge" class="verdict-badge verdict-ok">STANDBY</span>
-        <div>
-          <div id="verdict-title" class="verdict-title">Немає активних колісних вузлів</div>
-          <div id="verdict-details" class="verdict-details">
-            Підключіть ESP32-C3 по USB-C (Web Serial) або налаштуйте Wi-Fi POST на цей сервер.
+  <div class="app-shell">
+    <!-- TOPBAR -->
+    <header class="topbar surface enter-stage enter-1">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg class="ico ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 3v6M12 15v6M3 12h6M15 12h6"></path>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <h1>TechBIT <span class="badge-v2">v2.0 DIAG</span></h1>
+            <span class="coupling-tag" id="couplingIdsLabel">TR_001 + TL_042</span>
           </div>
+          <p class="brand-sub">5× C3 Axle Nodes · ESP-NOW LR Місток · S3 Master Black Box · GY-SHT40 · MCP6002</p>
         </div>
       </div>
 
-      <div class="verdict-actions">
-        <button type="button" id="btn-web-serial" class="btn btn-primary">Підключити USB Порт 1</button>
-        <button type="button" id="btn-web-serial-2" class="btn btn-primary">Підключити USB Порт 2</button>
-        <button type="button" id="btn-cal" class="btn btn-secondary">Калібрувати 5с (cal)</button>
-        <button type="button" id="btn-reset" class="btn btn-secondary">Скинути тривоги (reset)</button>
-        <button type="button" id="btn-mute" class="btn btn-secondary">Зумер (mute)</button>
-        <button type="button" id="btn-clear" class="btn btn-danger">Очистити</button>
+      <div class="topbar-meta">
+        <div class="source-pill" id="sourcePill" data-mode="waiting" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="source-pill-label" id="sourceModeText">ОЧІКУВАННЯ ДАТЧИКІВ</span>
+        </div>
+        <div class="meta-stat">
+          <span class="meta-label">Потік</span>
+          <span class="meta-value tabular" id="ppsValue">0 pkt/s</span>
+        </div>
+        <div class="meta-stat">
+          <span class="meta-label">Пакети</span>
+          <span class="meta-value tabular" id="totalPktsValue">0</span>
+        </div>
+        <div class="meta-stat">
+          <span class="meta-label">Час UTC</span>
+          <span class="meta-value tabular" id="utcClock">--:--:--</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- CABIN S3 MASTER MINI-LED INDICATOR BAR -->
+    <section class="cabin-bar surface enter-stage enter-2" aria-label="Індикатор кабіни S3 Master">
+      <div class="cabin-led-unit" id="cabinLedUnit" data-severity="STANDBY">
+        <div class="led-lamp" aria-hidden="true">
+          <span class="led-core"></span>
+        </div>
+        <div class="led-copy">
+          <span class="led-overline">S3 MASTER · MINI-LED КАБІНИ</span>
+          <div class="led-status-row">
+            <strong class="led-state-text" id="driverSeverityText">ОЧІКУВАННЯ</strong>
+            <span class="led-hint" id="driverSeverityHint">Підключіть плату ESP32 або увімкніть симулятор</span>
+          </div>
+        </div>
+        <div class="wheel-code-box" title="7-сегментний код колеса в кабіні водія">
+          <span class="wheel-code-label">КОЛЕСО</span>
+          <span class="wheel-code-value tabular" id="driverWheelCode">—</span>
+        </div>
+      </div>
+
+      <div class="cabin-telemetry-chips">
+        <div class="cabin-chip">
+          <span class="chip-label">Онлайн</span>
+          <strong class="chip-value tabular" id="activeWheelsChip">0 / 10</strong>
+        </div>
+        <div class="cabin-chip" id="shadowChip">
+          <span class="chip-label">Shadow лог</span>
+          <strong class="chip-value tabular" id="shadowCountChip">0</strong>
+        </div>
+        <div class="cabin-chip" id="roadChip">
+          <span class="chip-label">Дорога</span>
+          <strong class="chip-value" id="roadStateChip">Рівна</strong>
+        </div>
+        <div class="cabin-chip">
+          <span class="chip-label">Ями фільтр</span>
+          <strong class="chip-value tabular" id="potholeCountChip">0</strong>
+        </div>
+        <div class="cabin-chip" id="lteChip">
+          <span class="chip-label">LTE / BLE</span>
+          <strong class="chip-value" id="lteBleChip">OFF / OFF</strong>
+        </div>
+        <div class="cabin-chip">
+          <span class="chip-label">Black Box</span>
+          <strong class="chip-value tabular" id="blackBoxChip">0 зап.</strong>
+        </div>
+      </div>
+
+      <div class="cabin-actions">
+        <button type="button" class="btn btn-secondary btn-icon-start" id="btnResetAlerts" title="Скинути зафіксовані тривоги">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          <span>Скинути</span>
+        </button>
+
+        <button type="button" class="btn btn-secondary btn-icon-start" id="btnMuteBuzzer" aria-pressed="false" title="Вимкнути або увімкнути зумер кабіни">
+          <span class="icon-swap" data-active="false" id="muteIconSwap" aria-hidden="true">
+            <span class="icon-layer icon-inactive">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            </span>
+            <span class="icon-layer icon-active">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
+                <path d="m22 9-6 6M16 9l6 6"></path>
+              </svg>
+            </span>
+          </span>
+          <span id="muteLabel">Зумер</span>
+        </button>
+
+        <button type="button" class="btn btn-ghost btn-icon-start" id="btnClearState" title="Очистити всі дані стенду">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18"></path>
+            <path d="M8 6V4h8v2"></path>
+            <path d="M19 6l-1 14H6L5 6"></path>
+          </svg>
+          <span>Очистити</span>
+        </button>
       </div>
     </section>
 
-    <!-- Connection & Simulator Control Strip -->
-    <section class="connection-strip">
-      <div class="conn-card">
-        <h2>1. USB-C Web Serial (до 2 портів одночасно)</h2>
-        <div class="serial-ports-stack">
-          <div class="serial-port-row">
-            <span class="port-badge" id="port-badge-1">ПОРТ 1</span>
-            <span id="serial-status-text" class="muted serial-port-status">Не підключено</span>
-            <select id="port-wheel-map-1" class="port-map-select" title="Колесо для Порту 1">
-              <option value="auto">Авто ID</option>
-              <option value="0">0 — FL</option>
-              <option value="1">1 — FR</option>
-              <option value="2">2 — RL</option>
-              <option value="3">3 — RR</option>
-            </select>
+    <!-- CONNECTION & SIMULATOR DECK -->
+    <section class="controls-grid enter-stage enter-3" aria-label="Підключення плат та симулятор">
+      <!-- Card 1: Dual USB Web Serial -->
+      <article class="control-card surface">
+        <div class="control-head">
+          <div class="control-title">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 7v14M10 7l-3 3M10 7l3 3M4 13v2a3 3 0 0 0 3 3h3M17 11v4a3 3 0 0 1-3 3h-4"></path>
+              <circle cx="4" cy="11" r="1.5"></circle>
+              <rect x="15.5" y="8" width="3" height="3" rx="0.5"></rect>
+            </svg>
+            <h2>USB-C Web Serial (2 порти)</h2>
           </div>
-          <div class="serial-port-row">
-            <span class="port-badge" id="port-badge-2">ПОРТ 2</span>
-            <span id="serial-status-text-2" class="muted serial-port-status">Не підключено</span>
-            <select id="port-wheel-map-2" class="port-map-select" title="Колесо для Порту 2">
-              <option value="auto">Авто ID</option>
-              <option value="0">0 — FL</option>
-              <option value="1">1 — FR</option>
-              <option value="2">2 — RL</option>
-              <option value="3">3 — RR</option>
+          <span class="control-badge" id="serialSupportBadge">115200 baud</span>
+        </div>
+
+        <div class="port-stack">
+          <div class="port-row" id="serialRow1" data-connected="false">
+            <button type="button" class="btn btn-sm btn-primary btn-icon-start" id="btnSerial1">
+              <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"></path>
+              </svg>
+              <span id="serialBtnLabel1">USB 1</span>
+            </button>
+            <select class="select select-sm" id="serialSlot1" aria-label="Вісь для USB порту 1">
+              <option value="auto">Слот: Авто</option>
+              <option value="1">T1 (Тягач пер.)</option>
+              <option value="2">T2 (Тягач зад.)</option>
+              <option value="3">P1 (Причеп 1)</option>
+              <option value="4">P2 (Причеп 2)</option>
+              <option value="5">P3 (Причеп 3)</option>
             </select>
+            <span class="port-status tabular" id="serialStatus1">Вільний</span>
+          </div>
+
+          <div class="port-row" id="serialRow2" data-connected="false">
+            <button type="button" class="btn btn-sm btn-primary btn-icon-start" id="btnSerial2">
+              <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"></path>
+              </svg>
+              <span id="serialBtnLabel2">USB 2</span>
+            </button>
+            <select class="select select-sm" id="serialSlot2" aria-label="Вісь для USB порту 2">
+              <option value="auto">Слот: Авто</option>
+              <option value="1">T1 (Тягач пер.)</option>
+              <option value="2">T2 (Тягач зад.)</option>
+              <option value="3">P1 (Причеп 1)</option>
+              <option value="4">P2 (Причеп 2)</option>
+              <option value="5">P3 (Причеп 3)</option>
+            </select>
+            <span class="port-status tabular" id="serialStatus2">Вільний</span>
           </div>
         </div>
-      </div>
+      </article>
 
-      <div class="conn-card">
-        <h2>2. Wi-Fi HTTP Push (від ESP32-C3)</h2>
-        <p id="wifi-url-text" class="mono-small single-line-url" tabindex="0"><span>POST http://localhost:5050/api/telemetry</span></p>
-      </div>
-
-      <form id="ip-poll-form" class="conn-card conn-inline-form">
-        <label for="esp-ip-input">3. Опитування ESP32-C3 IP:</label>
-        <div class="inline-row">
-          <input id="esp-ip-input" type="text" placeholder="192.168.4.1 або 192.168.x.x" />
-          <button type="submit" id="btn-ip-poll" class="btn btn-secondary btn-sm">Підключити</button>
-          <button type="button" id="btn-ip-stop" class="btn btn-secondary btn-sm" hidden>Стоп</button>
+      <!-- Card 2: Wi-Fi Push Endpoint -->
+      <article class="control-card surface">
+        <div class="control-head">
+          <div class="control-title">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+              <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+              <circle cx="12" cy="20" r="1"></circle>
+            </svg>
+            <h2>Wi-Fi HTTP Push</h2>
+          </div>
+          <span class="control-badge">POST JSON</span>
         </div>
-      </form>
 
-      <div class="conn-card conn-inline-form">
-        <label for="sim-scenario-select">4. Стендовий симулятор (тест інтерфейсу):</label>
-        <div class="inline-row">
-          <select id="sim-scenario-select">
-            <option value="smooth">Рівний асфальт (Норма)</option>
-            <option value="cobblestone">Бруківка 4 колеса (BAD_ROAD)</option>
-            <option value="axle_transition">Заїзд передньою віссю на бруківку</option>
-            <option value="pothole_clip">Яма + BAT54S кліпінг + каскад RL</option>
-            <option value="brake_drag_heat">Клин гальм FR + перегрів 78.4°C</option>
-            <option value="bearing_wear">Знос підшипника RR (1480 Гц)</option>
-            <option value="dead_piezo">Обрив п'єзодатчика RL (&lt;1.8 мВ)</option>
-            <option value="vref_fault">Апаратна поломка Vref FL + волога RL</option>
+        <p class="control-desc">Приймає JSON пакети <code>techbit_c3_node</code>, <code>techbit_trailer_bridge</code>, <code>techbit_s3_master</code> і старі <code>techbit_node</code>.</p>
+
+        <div class="copy-row">
+          <code class="endpoint-box" id="wifiEndpointText">http://localhost:5050/api/telemetry</code>
+          <button type="button" class="btn btn-sm btn-secondary btn-icon-start" id="btnCopyWifi" aria-label="Копіювати URL Wi-Fi Push">
+            <span class="icon-swap" data-active="false" id="copyWifiIconSwap" aria-hidden="true">
+              <span class="icon-layer icon-inactive">
+                <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </span>
+              <span class="icon-layer icon-active">
+                <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+              </span>
+            </span>
+            <span id="copyWifiLabel">Копіювати</span>
+          </button>
+        </div>
+      </article>
+
+      <!-- Card 3: ESP32 IP Polling -->
+      <article class="control-card surface">
+        <div class="control-head">
+          <div class="control-title">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M2 12h20"></path>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"></path>
+            </svg>
+            <h2>Опитування ESP по IP</h2>
+          </div>
+          <span class="control-badge" id="pollStateBadge">Вимкнено</span>
+        </div>
+
+        <p class="control-desc">Опитує локальний HTTP-сервер ESP32 кожні 200 мс, якщо плата працює в режимі точки доступу або LAN.</p>
+
+        <form class="inline-form" id="ipPollForm">
+          <input type="text" class="input" id="ipPollInput" placeholder="192.168.1.50" autocomplete="off" aria-label="IP-адреса ESP32" />
+          <button type="submit" class="btn btn-sm btn-secondary" id="btnIpPoll">Опитувати</button>
+        </form>
+        <div class="inline-hint" id="ipPollHint">Живий пакет з USB або Wi-Fi автоматично має пріоритет.</div>
+      </article>
+
+      <!-- Card 4: V2 Coupling Simulator -->
+      <article class="control-card surface">
+        <div class="control-head">
+          <div class="control-title">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+              <path d="M9 9h6v6H9Z"></path>
+              <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"></path>
+            </svg>
+            <h2>Симулятор зчіпки v2</h2>
+          </div>
+          <span class="control-badge" id="simStateBadge">Вимкнено</span>
+        </div>
+
+        <p class="control-desc">Генерує повний потік 5× C3 вузлів + ESP-NOW містка + S3 Master для перевірки правил без «заліза».</p>
+
+        <div class="inline-form">
+          <select class="select" id="simScenarioSelect" aria-label="Сценарій симулятора">
+            <option value="smooth">1. Рівна траса (10 коліс ОК)</option>
+            <option value="cobblestone">2. Бруківка 10 км (фільтр осей)</option>
+            <option value="pothole_clip">3. Яма P2-L (BAT54S clip)</option>
+            <option value="brake_drag_p2l">4. Гальмо P2-L (ΔT → RED)</option>
+            <option value="bearing_t2r">5. Підшипник T2-R (1480 Гц)</option>
+            <option value="shadow_early">6. Shadow Mode P1-L (тихий лог)</option>
+            <option value="bridge_loss">7. Обрив ESP-NOW містка</option>
+            <option value="sht40_vref_fault">8. Збій Vref + SHT40 / RH &gt;85%</option>
           </select>
-          <button type="button" id="btn-sim-toggle" class="btn btn-warning btn-sm">Увімкнути симулятор</button>
+          <button type="button" class="btn btn-sm btn-accent btn-icon-start" id="btnSimToggle" aria-pressed="false">
+            <span class="icon-swap" data-active="false" id="simIconSwap" aria-hidden="true">
+              <span class="icon-layer icon-inactive">
+                <svg class="ico ico-sm icon-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="6 4 20 12 6 20 6 4"></polygon>
+                </svg>
+              </span>
+              <span class="icon-layer icon-active">
+                <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="6" y="6" width="12" height="12" rx="1.5"></rect>
+                </svg>
+              </span>
+            </span>
+            <span id="simBtnLabel">Старт</span>
+          </button>
         </div>
-      </div>
+      </article>
     </section>
 
-    <!-- 4 Wheel Cards -->
-    <section class="wheels-grid" aria-label="Стан чотирьох коліс">
-      <!-- Rendered dynamically into these 4 fixed containers to keep DOM stable -->
-      <article class="wheel-card" id="wheel-card-0" data-wheel="0"></article>
-      <article class="wheel-card" id="wheel-card-1" data-wheel="1"></article>
-      <article class="wheel-card" id="wheel-card-2" data-wheel="2"></article>
-      <article class="wheel-card" id="wheel-card-3" data-wheel="3"></article>
-    </section>
+    <!-- NAVIGATION TABS -->
+    <nav class="tablist-wrap" aria-label="Розділи стенду">
+      <div class="tablist" role="tablist">
+        <button type="button" class="tab-btn" role="tab" id="tab-rig" aria-selected="true" aria-controls="panel-rig" data-tab="rig">
+          <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path>
+            <path d="M15 18H9"></path>
+            <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path>
+            <circle cx="17" cy="18" r="2"></circle>
+            <circle cx="7" cy="18" r="2"></circle>
+          </svg>
+          <span>Зчіпка 10 коліс</span>
+        </button>
 
-    <!-- Engineering Workbench Tabs -->
-    <section class="workbench-box">
-      <div class="tablist scroller" role="tablist" focusgroup="tablist nomemory" aria-label="Інструменти інженерної діагностики">
-        <button type="button" role="tab" id="tab-charts" aria-selected="true" focusgroupstart>
-          Осцилограф та Спектр Фур'є (FFT)
+        <button type="button" class="tab-btn" role="tab" id="tab-charts" aria-selected="false" aria-controls="panel-charts" data-tab="charts">
+          <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+          </svg>
+          <span>Осцилограф &amp; FFT</span>
         </button>
-        <button type="button" role="tab" id="tab-ml" aria-selected="false">
-          Інспектор TinyML та Запис CSV
+
+        <button type="button" class="tab-btn" role="tab" id="tab-blackbox" aria-selected="false" aria-controls="panel-blackbox" data-tab="blackbox">
+          <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+            <path d="m3.3 7 8.7 5 8.7-5M12 22V12"></path>
+          </svg>
+          <span>Чорна скринька &amp; Інциденти</span>
+          <span class="tab-counter tabular" id="openIncidentsCounter" hidden>0</span>
         </button>
-        <button type="button" role="tab" id="tab-debug" aria-selected="false">
-          Пороги, Залізо та Консоль
+
+        <button type="button" class="tab-btn" role="tab" id="tab-config" aria-selected="false" aria-controls="panel-config" data-tab="config">
+          <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"></path>
+            <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path>
+            <path d="M12 2v2M12 22v-2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+          </svg>
+          <span>Пороги S3 &amp; Піни</span>
         </button>
       </div>
+    </nav>
 
-      <!-- Tab Panel 1: Oscilloscope & FFT Spectrum -->
-      <div role="tabpanel" id="panel-charts" aria-labelledby="tab-charts" tabindex="0">
-        <div class="panel-inner">
-          <div class="charts-toolbar">
-            <div class="inline-row">
-              <label for="fft-wheel-select">Колесо для спектра FFT:</label>
-              <select id="fft-wheel-select">
-                <option value="0">FL (Переднє ліве)</option>
-                <option value="1">FR (Переднє праве)</option>
-                <option value="2">RL (Заднє ліве)</option>
-                <option value="3">RR (Заднє праве)</option>
-              </select>
+    <!-- MAIN PANELS -->
+    <main class="main-content">
+      <!-- PANEL 1: 10-WHEEL RIG SCHEMATIC -->
+      <section class="tab-panel" id="panel-rig" role="tabpanel" aria-labelledby="tab-rig">
+        <div class="rig-layout">
+          <!-- Tractor Block -->
+          <div class="asset-group surface">
+            <div class="asset-header">
+              <div class="asset-title-group">
+                <span class="asset-kicker">ТЯГАЧ · 2 ОСІ · 4 КОЛЕСА</span>
+                <h2 class="asset-heading">
+                  <span id="tractorIdHeading">TR_001</span>
+                  <span class="asset-bus-tag">CAN 500 kbps → S3 Master</span>
+                </h2>
+              </div>
+              <span class="asset-note">Обидві осі на уніфікованих C3 вузлах (без аналогових входів на S3)</span>
             </div>
-            <div class="inline-row">
-              <label class="checkbox-label" for="chk-freeze-charts">
-                <input type="checkbox" id="chk-freeze-charts" />
-                <span>Заморозити графіки (Freeze)</span>
-              </label>
-              <button type="button" id="btn-clear-charts" class="btn btn-secondary btn-sm">Очистити графіки</button>
+            <div class="axles-stack" id="tractorAxlesContainer"></div>
+          </div>
+
+          <!-- Wireless Trailer Bridge Connector -->
+          <div class="bridge-connector surface" id="bridgeConnector" data-online="false">
+            <div class="bridge-left">
+              <div class="bridge-icon-box" aria-hidden="true">
+                <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path>
+                  <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path>
+                  <circle cx="12" cy="12" r="2"></circle>
+                  <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path>
+                  <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"></path>
+                </svg>
+              </div>
+              <div>
+                <div class="bridge-title-row">
+                  <h3>C3 Trailer Bridge · ESP-NOW LR + AES-128</h3>
+                  <span class="pill" id="bridgeStatusPill" data-state="offline">OFFLINE</span>
+                </div>
+                <p class="bridge-sub">Бездротове зчеплення причепа Drop &amp; Hook · 2.4 ГГц зовнішня антена</p>
+              </div>
+            </div>
+
+            <div class="bridge-metrics">
+              <div class="bridge-stat">
+                <span class="meta-label">Причеп ID</span>
+                <strong class="tabular" id="bridgeTrailerId">TL_042</strong>
+              </div>
+              <div class="bridge-stat">
+                <span class="meta-label">Спарення</span>
+                <strong id="bridgePairedText">Немає</strong>
+              </div>
+              <div class="bridge-stat">
+                <span class="meta-label">RSSI</span>
+                <strong class="tabular" id="bridgeRssiText">—</strong>
+              </div>
+              <div class="bridge-stat">
+                <span class="meta-label">Вузлів / CAN RX</span>
+                <strong class="tabular" id="bridgeCanText">0 / 0</strong>
+              </div>
+              <div class="bridge-stat">
+                <span class="meta-label">Seq</span>
+                <strong class="tabular" id="bridgeSeqText">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trailer Block -->
+          <div class="asset-group surface">
+            <div class="asset-header">
+              <div class="asset-title-group">
+                <span class="asset-kicker">ПРИЧЕП · 3 ОСІ · 6 КОЛІС</span>
+                <h2 class="asset-heading">
+                  <span id="trailerIdHeading">TL_042</span>
+                  <span class="asset-bus-tag">CAN 500 kbps → C3 Bridge → ESP-NOW</span>
+                </h2>
+              </div>
+              <span class="asset-note">Клікніть по будь-якому колесу, щоб обрати його для осцилографа та FFT</span>
+            </div>
+            <div class="axles-stack" id="trailerAxlesContainer"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 2: OSCILLOSCOPE RMS & 32-BIN FFT SPECTRUM -->
+      <section class="tab-panel" id="panel-charts" role="tabpanel" aria-labelledby="tab-charts" hidden>
+        <div class="panel surface">
+          <div class="panel-header-row">
+            <div>
+              <h2>Осцилограф вібрації RMS та 32-смуговий спектр Фур'є (FFT)</h2>
+              <p class="panel-sub">Оберіть будь-яке з 10 коліс. На графіку RMS додатково показано пунктиром протилежне колесо тієї самої осі.</p>
+            </div>
+            <div class="chart-actions">
+              <button type="button" class="btn btn-sm btn-secondary btn-icon-start" id="btnFreezeCharts" aria-pressed="false">
+                <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="6" y="4" width="4" height="16"></rect>
+                  <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+                <span id="freezeChartsLabel">Пауза</span>
+              </button>
+              <button type="button" class="btn btn-sm btn-ghost" id="btnClearCharts">Очистити графік</button>
+            </div>
+          </div>
+
+          <div class="wheel-selector-bar" id="wheelSelectorBar" role="group" aria-label="Вибір колеса для графіків"></div>
+
+          <div class="selected-metrics-strip" id="selectedMetricsStrip">
+            <div class="metric-box">
+              <span class="meta-label">Колесо</span>
+              <strong class="tabular" id="selWheelCode">T1-L</strong>
+            </div>
+            <div class="metric-box">
+              <span class="meta-label">Вібрація RMS</span>
+              <strong class="tabular" id="selRmsMmS">—</strong>
+            </div>
+            <div class="metric-box">
+              <span class="meta-label">Амплітуда mV</span>
+              <strong class="tabular" id="selRmsMv">—</strong>
+            </div>
+            <div class="metric-box">
+              <span class="meta-label">Peak / Crest</span>
+              <strong class="tabular" id="selPeakCrest">—</strong>
+            </div>
+            <div class="metric-box">
+              <span class="meta-label">Домінанта fDom</span>
+              <strong class="tabular" id="selFdom">—</strong>
+            </div>
+            <div class="metric-box">
+              <span class="meta-label">Темп. / ΔT осі</span>
+              <strong class="tabular" id="selTempDelta">—</strong>
+            </div>
+            <div class="metric-box">
+              <span class="meta-label">SHT40 RH %</span>
+              <strong class="tabular" id="selHumidity">—</strong>
+            </div>
+            <div class="metric-box">
+              <span class="meta-label">MCP6002 Vref</span>
+              <strong class="tabular" id="selVref">—</strong>
             </div>
           </div>
 
           <div class="charts-grid">
-            <div class="chart-card">
-              <div class="chart-header">
-                <h3>Часова діаграма RMS вібрації (мВ)</h3>
-                <span class="legend">
-                  <i class="dot dot-fl"></i>FL
-                  <i class="dot dot-fr"></i>FR
-                  <i class="dot dot-rl"></i>RL
-                  <i class="dot dot-rr"></i>RR
-                </span>
+            <div class="canvas-frame">
+              <div class="canvas-head">
+                <div>
+                  <h3>Динаміка RMS вібрації (мм/с)</h3>
+                  <span class="canvas-sub" id="rmsChartLegend">Суцільна — обране колесо · Пунктир — протилежне колесо осі</span>
+                </div>
+                <span class="pill" id="rmsThresholdTag">Поріг: 3.5 / 6.5 мм/с</span>
               </div>
-              <canvas id="canvas-rms" width="760" height="260"></canvas>
+              <canvas id="rmsCanvas" width="760" height="270" aria-label="Графік RMS вібрації"></canvas>
             </div>
 
-            <div class="chart-card">
-              <div class="chart-header">
-                <h3>Спектр Фур'є 0–8000 Гц (32 біни по 250 Гц)</h3>
-                <span id="fft-meta" class="mono-small">fDom: — | fCent: —</span>
+            <div class="canvas-frame">
+              <div class="canvas-head">
+                <div>
+                  <h3>Спектр Фур'є (32 біни · 0 – 4480 Гц)</h3>
+                  <span class="canvas-sub">0–600 Гц дорога · 600–2400 Гц підшипник · 2400–4480 Гц гальма / тертя</span>
+                </div>
+                <span class="pill" id="fftPeakTag">fDom: — Гц</span>
               </div>
-              <canvas id="canvas-fft" width="760" height="260"></canvas>
-              <p id="fft-honest-note" class="muted" hidden>
-                Поточне джерело (CAN Hub) не передає 32-біновий спектр — підключіть колісний вузол напряму по USB або Wi-Fi для повного спектра.
-              </p>
+              <canvas id="fftCanvas" width="760" height="270" aria-label="Графік 32-смугового спектру FFT"></canvas>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Tab Panel 2: TinyML Inspector & CSV Recorder -->
-      <div role="tabpanel" id="panel-ml" aria-labelledby="tab-ml" hidden="until-found">
-        <div class="panel-inner">
-          <div class="recorder-bar">
-            <div class="inline-row">
-              <label for="csv-label-select">Мітка класу для запису CSV:</label>
-              <select id="csv-label-select">
-                <option value="auto">Авто (поточний вивід ML)</option>
-                <option value="0">0 — NORMAL (рівна дорога)</option>
-                <option value="1">1 — BAD_ROAD (бруківка / тряска)</option>
-                <option value="2">2 — POTHOLE_IMPACT (яма / удар)</option>
-                <option value="3">3 — ANOMALY_FAULT (підшипник / клин колодок)</option>
-              </select>
-              <button type="button" id="btn-csv-record" class="btn btn-primary btn-sm">Почати запис CSV</button>
-              <button type="button" id="btn-csv-download" class="btn btn-secondary btn-sm" disabled>Завантажити CSV</button>
-              <button type="button" id="btn-csv-clear" class="btn btn-secondary btn-sm">Скинути (0 рядків)</button>
+      <!-- PANEL 3: BLACK BOX ANOMALY_BURST & GROUND TRUTH INCIDENTS -->
+      <section class="tab-panel" id="panel-blackbox" role="tabpanel" aria-labelledby="tab-blackbox" hidden>
+        <div class="blackbox-grid">
+          <div class="panel surface">
+            <div class="panel-header-row">
+              <div>
+                <h2>Інциденти &amp; Ground Truth (SLA 48 год)</h2>
+                <p class="panel-sub">Кожна подія YELLOW / RED / SHADOW формує тікет. Закрийте інцидент у 2 кліки для формування датасету ML.</p>
+              </div>
+              <a class="btn btn-sm btn-secondary btn-icon-start" href="/api/export.csv" download="techbit_v2_ground_truth.csv">
+                <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Експорт CSV</span>
+              </a>
             </div>
-            <div class="mono-small">
-              Записано кадрів: <strong id="csv-count">0</strong> (сумісно з <code>ml_trainer/train_classifier.py --csv</code>)
+
+            <div class="incidents-scroll" id="incidentsContainer">
+              <div class="empty-state">
+                <p>Інцидентів ще не зафіксовано. Увімкніть сценарій <strong>«Заклинило гальмо P2-L»</strong> або <strong>«Shadow Mode»</strong>, або підключіть реальний датчик.</p>
+              </div>
             </div>
           </div>
 
-          <div tabindex="0" role="region" aria-labelledby="ml-table-caption" class="table-wrapper">
-            <table>
-              <caption id="ml-table-caption">
-                10 нормалізованих ознак нейромережі MLP (10 → 16 → 12 → 4) та ймовірності Softmax у реальному часі
-              </caption>
-              <thead>
-                <tr>
-                  <th>Колесо</th>
-                  <th>f0 logRMS</th>
-                  <th>f1 Peer</th>
-                  <th>f2 Axle</th>
-                  <th>f3 Crest</th>
-                  <th>f4 Kurt</th>
-                  <th>f5 Low</th>
-                  <th>f6 Mid</th>
-                  <th>f7 High</th>
-                  <th>f8 Cent</th>
-                  <th>f9 Ton</th>
-                  <th>Softmax [N / B / P / F]</th>
-                  <th>Вердикт</th>
-                </tr>
-              </thead>
-              <tbody id="ml-table-body">
-                <tr>
-                  <td colspan="13" class="muted">Немає активних коліс для аналізу.</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="panel surface">
+            <div class="panel-header-row">
+              <div>
+                <h2>Чорна скринька S3 · Пакет <code>ANOMALY_BURST</code></h2>
+                <p class="panel-sub">Точний JSON-контракт v2 для LTE-вивантаження у хмару з <code>burst_samples_base64</code>.</p>
+              </div>
+              <div class="burst-toolbar">
+                <select class="select select-sm" id="burstSelector" aria-label="Вибір пакету ANOMALY_BURST">
+                  <option value="0">Останній пакет</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-secondary btn-icon-start" id="btnCopyBurst">
+                  <span class="icon-swap" data-active="false" id="copyBurstIconSwap" aria-hidden="true">
+                    <span class="icon-layer icon-inactive">
+                      <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </span>
+                    <span class="icon-layer icon-active">
+                      <svg class="ico ico-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 6 9 17l-5-5"></path>
+                      </svg>
+                    </span>
+                  </span>
+                  <span id="copyBurstLabel">Копіювати JSON</span>
+                </button>
+              </div>
+            </div>
+
+            <pre class="json-viewer" id="burstJsonViewer">// Очікування першого пакету ANOMALY_BURST від S3 Master або Rule Engine...</pre>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Tab Panel 3: Threshold Tuning, Hardware Debug & Console -->
-      <div role="tabpanel" id="panel-debug" aria-labelledby="tab-debug" hidden="until-found">
-        <div class="panel-inner">
-          <div class="debug-grid">
-            <!-- Thresholds Form -->
-            <form id="config-form" class="debug-card">
-              <h3>Налаштування порогів класифікатора (Live)</h3>
+      <!-- PANEL 4: S3 THRESHOLD CONFIG, BOARD CLI & PINOUT -->
+      <section class="tab-panel" id="panel-config" role="tabpanel" aria-labelledby="tab-config" hidden>
+        <div class="config-grid">
+          <!-- Rule Engine Thresholds -->
+          <div class="panel surface">
+            <div class="panel-header-row">
+              <div>
+                <h2>Динамічні пороги Rule Engine &amp; S3 Master</h2>
+                <p class="panel-sub">Оновлюють локальний стенд миттєво і можуть бути записані прямо в NVS ESP32-S3 командою <code>cfg {...}</code>.</p>
+              </div>
+              <span class="pill tabular" id="configVersionPill">v1</span>
+            </div>
+
+            <form class="config-form" id="configForm">
               <div class="form-grid">
-                <label>Peer Ratio (рівна дорога)
-                  <input type="number" step="0.05" min="1.0" max="5.0" name="faultPeerRatioMin" />
+                <label class="field">
+                  <span>Темп. Увага (°C)</span>
+                  <input type="number" step="0.5" class="input tabular" name="tempWarnC" />
                 </label>
-                <label>Peer Ratio (бруківка)
-                  <input type="number" step="0.05" min="1.1" max="6.0" name="faultOnBadRoadPeerRatioMin" />
+                <label class="field">
+                  <span>Темп. Критично (°C)</span>
+                  <input type="number" step="0.5" class="input tabular" name="tempCritC" />
                 </label>
-                <label>Підтвердження тривоги (мс)
-                  <input type="number" step="100" min="500" max="15000" name="faultConfirmDurationMs" />
+                <label class="field">
+                  <span>ΔT осі Увага (°C)</span>
+                  <input type="number" step="0.5" class="input tabular" name="axleTempDeltaWarnC" />
                 </label>
-                <label>Тихе попередження (мс)
-                  <input type="number" step="100" min="200" max="10000" name="warningDelayMs" />
+                <label class="field">
+                  <span>ΔT осі Критично (°C)</span>
+                  <input type="number" step="0.5" class="input tabular" name="axleTempDeltaCritC" />
                 </label>
-                <label>Поріг стоянки RMS (мВ)
-                  <input type="number" step="0.5" min="1.0" max="30.0" name="standstillRmsMv" />
+                <label class="field">
+                  <span>Вібр. Увага (мм/с)</span>
+                  <input type="number" step="0.1" class="input tabular" name="vibWarnRmsMmS" />
                 </label>
-                <label>Перегрів SHT40 абс. (°C)
-                  <input type="number" step="1" min="40" max="140" name="tempOverheatAbsC" />
+                <label class="field">
+                  <span>Вібр. Критично (мм/с)</span>
+                  <input type="number" step="0.1" class="input tabular" name="vibCritRmsMmS" />
                 </label>
-                <label>Перегрів ΔT над медіаною (°C)
-                  <input type="number" step="1" min="5" max="60" name="tempDeltaOverPeerC" />
+                <label class="field">
+                  <span>YELLOW гістерезис (с)</span>
+                  <input type="number" step="1" class="input tabular" name="yellowConfirmSec" />
                 </label>
-                <label>Таймаут вузла OFFLINE (мс)
-                  <input type="number" step="100" min="500" max="10000" name="nodeTimeoutMs" />
+                <label class="field">
+                  <span>RED гістерезис (с)</span>
+                  <input type="number" step="1" class="input tabular" name="redConfirmSec" />
                 </label>
-                <label>Vref MCP6002 Мін (мВ)
-                  <input type="number" step="10" min="1000" max="1600" name="vrefMinMv" />
+                <label class="field">
+                  <span>MCP6002 Vref min (мВ)</span>
+                  <input type="number" step="10" class="input tabular" name="vrefMinMv" />
                 </label>
-                <label>Vref MCP6002 Макс (мВ)
-                  <input type="number" step="10" min="1700" max="2400" name="vrefMaxMv" />
+                <label class="field">
+                  <span>MCP6002 Vref max (мВ)</span>
+                  <input type="number" step="10" class="input tabular" name="vrefMaxMv" />
+                </label>
+                <label class="field">
+                  <span>Конденсат RH (%)</span>
+                  <input type="number" step="1" class="input tabular" name="humidityWarnPct" />
+                </label>
+                <label class="field field-checkbox">
+                  <input type="checkbox" name="shadowModeEnabled" />
+                  <span>Shadow Mode (тихий лог без LED)</span>
                 </label>
               </div>
-              <div class="inline-row" style="margin-top: 12px;">
-                <button type="submit" class="btn btn-primary btn-sm">Застосувати пороги</button>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Застосувати в стенді</button>
+                <button type="button" class="btn btn-secondary" id="btnPushCfgToS3">Надіслати в S3 по USB / Wi-Fi</button>
               </div>
             </form>
+          </div>
 
-            <!-- Baselines & ESP Node Controls -->
-            <div class="debug-card">
-              <h3>Управління вузлом ESP32-C3 та Базові рівні</h3>
-              <form id="baselines-form" class="form-grid" style="margin-bottom: 14px;">
-                <label>Baseline FL (мВ) <input type="number" step="0.5" min="5" max="500" name="base0" /></label>
-                <label>Baseline FR (мВ) <input type="number" step="0.5" min="5" max="500" name="base1" /></label>
-                <label>Baseline RL (мВ) <input type="number" step="0.5" min="5" max="500" name="base2" /></label>
-                <label>Baseline RR (мВ) <input type="number" step="0.5" min="5" max="500" name="base3" /></label>
-                <div class="full-span">
-                  <button type="submit" class="btn btn-secondary btn-sm">Оновити Baseline вручну</button>
-                </div>
-              </form>
+          <!-- Board CLI Controls -->
+          <div class="panel surface">
+            <div class="panel-header-row">
+              <div>
+                <h2>Керування платами ESP32 (CLI)</h2>
+                <p class="panel-sub">Швидкі команди для прошивок <code>c3_node</code>, <code>c3_trailer_bridge</code> та <code>s3_master</code>.</p>
+              </div>
+              <select class="select select-sm" id="cliTargetSelect" aria-label="Цільовий порт CLI">
+                <option value="all">Усі USB + Wi-Fi</option>
+                <option value="1">Тільки USB 1</option>
+                <option value="2">Тільки USB 2</option>
+              </select>
+            </div>
 
-              <div class="esp-remote-box">
-                <div class="inline-row" style="margin-bottom: 8px;">
-                  <label for="esp-target-port">Цільовий USB-порт для команд:</label>
-                  <select id="esp-target-port">
-                    <option value="all">Обидва порти (Порт 1 + Порт 2)</option>
-                    <option value="0">Тільки USB Порт 1</option>
-                    <option value="1">Тільки USB Порт 2</option>
-                  </select>
-                </div>
-                <div class="inline-row">
-                  <label for="esp-wheel-assign">Змінити ID підключеної плати (NVS):</label>
-                  <select id="esp-wheel-assign">
-                    <option value="0">0 — FL</option>
-                    <option value="1">1 — FR</option>
-                    <option value="2">2 — RL</option>
-                    <option value="3">3 — RR</option>
-                  </select>
-                  <button type="button" id="btn-set-esp-wheel" class="btn btn-secondary btn-sm">Записати в ESP</button>
-                </div>
-
-                <form id="wifi-provision-form" class="inline-row" style="margin-top: 10px;">
-                  <input id="wifi-ssid" type="text" placeholder="Wi-Fi SSID" />
-                  <input id="wifi-pass" type="password" placeholder="Пароль" />
-                  <input id="wifi-url" type="text" placeholder="http://PC_IP:5050/api/telemetry" />
-                  <button type="submit" class="btn btn-secondary btn-sm">Надіслати Wi-Fi в ESP</button>
-                </form>
+            <div class="cli-section">
+              <span class="cli-group-label">Призначити вісь вузлу C3 (зберігається в NVS)</span>
+              <div class="cli-btn-row">
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="slot 1">slot 1 (T1)</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="slot 2">slot 2 (T2)</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="slot 3">slot 3 (P1)</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="slot 4">slot 4 (P2)</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="slot 5">slot 5 (P3)</button>
               </div>
             </div>
 
-            <!-- Pinout Reference -->
-            <div class="debug-card">
-              <h3>Актуальна розпіновка ESP32-C3 SuperMini (PCB)</h3>
-              <ul class="pinout-list">
-                <li><strong>GPIO2 (ADC1_CH2):</strong> вихід підсилювача MCP6002 (R5/C4), у спокої <code>~1650 мВ</code></li>
-                <li><strong>GPIO8 (SDA) / GPIO9 (SCL):</strong> датчик температури і вологості <code>GY-SHT40</code> (роз'єм J3, <code>0x44</code>)</li>
-                <li><strong>Увага по GPIO8:</strong> синій світлодіод на платі SuperMini висить на GPIO8 — у прошивці блимання вимкнене при <code>ENABLE_SHT40=1</code></li>
-                <li><strong>GPIO21 (TX) / GPIO20 (RX):</strong> CAN-шина <code>SN65HVD230</code> (500 kbps)</li>
-              </ul>
+            <div class="cli-section">
+              <span class="cli-group-label">S3 Master сервіс, BLE та телеметрія</span>
+              <div class="cli-btn-row">
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="ble on">BLE 15 хв ON</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="ble off">BLE OFF</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="json">JSON потік</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="status">Статус</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="sim">Тест-імпульс</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-cli="reset">Скинути тривогу</button>
+              </div>
             </div>
 
-            <!-- Serial & Telemetry Console -->
-            <div class="debug-card">
-              <h3>Консоль команд та останні пакети</h3>
-              <form id="raw-cmd-form" class="inline-row" style="margin-bottom: 8px;">
-                <input id="raw-cmd-input" type="text" placeholder="Команда ESP: status | cal | reset | json | human | rate 120" />
-                <button type="submit" class="btn btn-secondary btn-sm">Надіслати</button>
-              </form>
-              <pre id="raw-console" class="console-box">Очікування подій...</pre>
+            <div class="cli-section">
+              <span class="cli-group-label">Прив'язка ID тягача / причепа (Drop &amp; Hook)</span>
+              <div class="inline-form">
+                <input type="text" class="input" id="cliTractorId" value="TR_001" aria-label="ID тягача" />
+                <button type="button" class="btn btn-sm btn-secondary" id="btnSendTractorId">Записати Tractor</button>
+              </div>
+              <div class="inline-form">
+                <input type="text" class="input" id="cliTrailerId" value="TL_042" aria-label="ID причепа" />
+                <button type="button" class="btn btn-sm btn-secondary" id="btnSendTrailerId">Записати Trailer</button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  </main>
 
-  <script src="/app.js"></script>
+          <!-- Hardware Pinout (KiCad PCB + v2 Roles) -->
+          <div class="panel surface">
+            <div class="panel-header-row">
+              <div>
+                <h2>Розпіновка v2 (KiCad PCB + S3 Master)</h2>
+                <p class="panel-sub">Синхронізовано з реальною платою підсилювача MCP6002 + BAT54S та прошивкою <code>esp-code</code>.</p>
+              </div>
+            </div>
+
+            <div class="pinout-tables">
+              <div class="pinout-block">
+                <h3>ESP32-C3 SuperMini — Уніфікований вузол осі (5 шт.)</h3>
+                <table class="pin-table">
+                  <thead>
+                    <tr><th>Сигнал</th><th>GPIO</th><th>Примітка</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>П'єзо Ліве (L)</td><td class="mono">GPIO2 (ADC1_CH2)</td><td>AFE MCP6002 Vref ≈ 1.65 В + BAT54S</td></tr>
+                    <tr><td>П'єзо Праве (R)</td><td class="mono">GPIO3 (ADC1_CH3)</td><td>2-й канал осі · DMA 9 кГц (unit=0)</td></tr>
+                    <tr><td>I2C GY-SHT40</td><td class="mono">GPIO8 / GPIO9</td><td>SDA/SCL · авто-пошук 0x44/0x45</td></tr>
+                    <tr><td>NTC резерв (L/R)</td><td class="mono">GPIO0 / GPIO4</td><td>ADC1_CH0 / CH4 (коли SHT40=0)</td></tr>
+                    <tr><td>CAN SN65HVD230</td><td class="mono">GPIO21 / GPIO20</td><td>TX/RX · 500 kbps · 120 Ом</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="pinout-block">
+                <h3>ESP32-S3 Master (Кабіна) &amp; C3 Trailer Bridge</h3>
+                <table class="pin-table">
+                  <thead>
+                    <tr><th>Модуль / Сигнал</th><th>GPIO</th><th>Примітка</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>S3 CAN (Тягач)</td><td class="mono">GPIO4 / GPIO5</td><td>TX/RX · збір T1 та T2</td></tr>
+                    <tr><td>S3 LTE SIM7600</td><td class="mono">GPIO17 / GPIO18</td><td>UART TX/RX · HTTPS ANOMALY_BURST</td></tr>
+                    <tr><td>S3 Mini-LED + Зумер</td><td class="mono">GPIO6, 7, 14, 15</td><td>G / Y / R + Buzzer (без OLED)</td></tr>
+                    <tr><td>S3 Кнопка BLE 15 хв</td><td class="mono">GPIO0</td><td>Service Mode лише для СТО</td></tr>
+                    <tr><td>C3 Bridge ESP-NOW</td><td class="mono">2.4 ГГц + GPIO9</td><td>LR 1 Мбіт/с + AES-128 · Pairing</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Console & Manual Command -->
+          <div class="panel surface">
+            <div class="panel-header-row">
+              <div>
+                <h2>Консоль подій &amp; сирий Serial / Wi-Fi потік</h2>
+                <p class="panel-sub">Живий журнал команд, підключень USB та відповідей плати.</p>
+              </div>
+              <span class="pill tabular" id="consoleCountPill">0 записів</span>
+            </div>
+
+            <div class="console-box" id="consoleBox" aria-live="polite"></div>
+
+            <form class="inline-form console-form" id="rawCommandForm">
+              <input type="text" class="input mono" id="rawCommandInput" placeholder="Введіть команду ESP (напр. status, slot 4, ble on)..." autocomplete="off" aria-label="Сира команда для ESP32" />
+              <button type="submit" class="btn btn-sm btn-primary">Надіслати</button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js" defer></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 {
   "name": "techbit-test-web-interface",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Engineering diagnostic, FFT spectrum analysis, TinyML tuning & hardware test bench for TechBIT (ESP32-C3 SuperMini)",
+  "description": "TechBIT v2.0 Engineering Workbench — 10-Wheel Truck & Trailer Diagnostics (C3 Axle Nodes, ESP-NOW Bridge, S3 Master Black Box, SHT40 & FFT)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

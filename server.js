@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { WheelClassifierEngine } = require('./classifier_engine');
+const { TechBitV2Engine } = require('./v2_engine');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME_TYPES = {
@@ -18,22 +18,18 @@ const MIME_TYPES = {
 const SIM_SCENARIOS = [
   'smooth',
   'cobblestone',
-  'axle_transition',
   'pothole_clip',
-  'brake_drag_heat',
-  'bearing_wear',
-  'dead_piezo',
-  'vref_fault',
+  'brake_drag_p2l',
+  'bearing_t2r',
+  'shadow_early',
+  'bridge_loss',
+  'sht40_vref_fault',
 ];
 
 function isPrivateLanIpv4(ip) {
   if (/^192\.168\./.test(ip) || /^10\./.test(ip)) return true;
   const m = ip.match(/^172\.(\d+)\./);
-  if (m) {
-    const second = Number(m[1]);
-    return second >= 16 && second <= 31;
-  }
-  return false;
+  return Boolean(m && Number(m[1]) >= 16 && Number(m[1]) <= 31);
 }
 
 function getLanUrls(port) {
@@ -41,174 +37,178 @@ function getLanUrls(port) {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const info of nets[name] || []) {
-      if (info.family === 'IPv4' && !info.internal) {
-        ips.push(info.address);
-      }
+      if (info.family === 'IPv4' && !info.internal) ips.push(info.address);
     }
   }
   ips.sort((a, b) => Number(isPrivateLanIpv4(b)) - Number(isPrivateLanIpv4(a)));
   return ips.map((ip) => `http://${ip}:${port}/api/telemetry`);
 }
 
-function buildSimulatedSpectrum(bandLow, bandMid, bandHigh, rmsMv, domFreqHz, seedPhase) {
+function buildSimSpectrum(rmsMv, domFreqHz, isRough, phase) {
   const bins = new Array(32).fill(0);
   for (let b = 0; b < 32; b++) {
-    const fCenter = b * 250 + 125;
-    let weight = 0.08;
-    if (fCenter < 600) weight = bandLow;
-    else if (fCenter < 2500) weight = bandMid * 0.6;
-    else weight = bandHigh * 0.35;
-
-    const distHz = Math.abs(fCenter - domFreqHz);
-    const peakBoost = distHz < 260 ? (1.0 - distHz / 280) * 1.4 : 0;
-    const ripple = 0.85 + 0.15 * Math.sin(seedPhase + b * 0.9);
-    bins[b] = Number((rmsMv * (weight * 0.42 + peakBoost * 0.55) * ripple).toFixed(1));
+    const fCenter = b * 140 + 70; // 0..4480 Hz
+    const dist = Math.abs(fCenter - domFreqHz);
+    const peak = dist < 170 ? (1 - dist / 180) * 1.45 : 0;
+    const lowFloor = fCenter < 600 ? (isRough ? 0.55 : 0.25) : 0.08;
+    const ripple = 0.86 + 0.14 * Math.sin(phase + b * 0.7);
+    bins[b] = Number((rmsMv * (lowFloor + peak) * ripple).toFixed(1));
   }
   return bins;
 }
 
-function generateSimulatorPackets(scenario, elapsedMs, tickIdx) {
-  const phase = tickIdx * 0.35;
+function generateV2SimPackets(scenario, elapsedMs, tickIdx) {
+  const phase = tickIdx * 0.32;
   const packets = [];
+  const nodeIds = ['C3_110011', 'C3_110012', 'C3_998876', 'C3_998877', 'C3_998878'];
 
-  for (let w = 0; w < 4; w++) {
-    const jitter = 0.96 + 0.06 * Math.sin(phase + w * 1.3);
-    let rms = 27.5 * jitter;
-    let peak = rms * 2.65;
-    let bL = 0.56;
-    let bM = 0.31;
-    let bH = 0.13;
-    let fDom = 240 + w * 12;
-    let fCent = 740;
-    let ton = 2.7;
-    let kurt = 3.0;
-    let clip = false;
-    let dcOffsetMv = 1650 + Math.sin(phase + w) * 8;
-    let tempC = 32.0 + w * 0.7;
-    let humidityPct = 41.0 + w * 1.1;
-    const sht40Ok = true;
+  // Trailer Bridge status (dropped during bridge_loss)
+  if (scenario !== 'bridge_loss') {
+    packets.push({
+      type: 'techbit_trailer_bridge',
+      mcu: 'SIM_ESP32-C3',
+      trailerId: 'TL_042',
+      paired: true,
+      rssi: Math.round(-54 + Math.sin(phase) * 3),
+      seq: tickIdx,
+      nodeCount: 3,
+      canRx: tickIdx * 6,
+    });
+  }
+
+  // S3 Master telemetry meta
+  packets.push({
+    type: 'techbit_s3_master',
+    mcu: 'SIM_ESP32-S3',
+    deviceId: 'S3_A1B2C3',
+    tractorId: 'TR_001',
+    trailerId: 'TL_042',
+    bleActive: false,
+    lteOnline: true,
+    pendingQueue: 0,
+  });
+
+  // Generate 5 unified C3 Axle Nodes (Tractor T1..T2, Trailer P1..P3 = 10 wheels)
+  for (let slot = 1; slot <= 5; slot++) {
+    if (scenario === 'bridge_loss' && slot >= 3) continue; // Trailer ESP-NOW lost
+
+    const jL = 0.95 + 0.07 * Math.sin(phase + slot * 1.1);
+    const jR = 0.95 + 0.07 * Math.cos(phase + slot * 1.4);
+
+    let vL = 1.15 * jL;
+    let vR = 1.18 * jR;
+    let pL = vL * 2.6;
+    let pR = vR * 2.6;
+    let cL = 2.65;
+    let cR = 2.62;
+    let tL = 33.2 + slot * 0.5;
+    let tR = 33.5 + slot * 0.5;
+    let rhL = 42.0 + slot;
+    let rhR = 42.5 + slot;
+    let shtOkL = true;
+    let shtOkR = true;
+    let vrefL = 1650 + Math.sin(phase + slot) * 7;
+    let vrefR = 1648 + Math.cos(phase + slot) * 7;
+    let fL = 240 + slot * 10;
+    let fR = 245 + slot * 10;
+    let clipL = false;
+    let clipR = false;
+    let rough = false;
 
     if (scenario === 'cobblestone') {
-      rms = (165 + w * 11) * jitter;
-      peak = rms * 3.25;
-      bL = 0.63;
-      bM = 0.27;
-      bH = 0.10;
-      fDom = 285;
-      fCent = 790;
-      ton = 3.1;
-      kurt = 3.6;
-    } else if (scenario === 'axle_transition') {
-      if (w === 0 || w === 1) {
-        rms = 178 * jitter;
-        peak = rms * 3.15;
-        bL = 0.61;
-        bM = 0.29;
-        bH = 0.10;
-        fDom = 275;
-        fCent = 780;
-        ton = 3.1;
-        kurt = 3.5;
-      }
+      rough = true;
+      vL = (4.6 + slot * 0.12) * jL;
+      vR = (4.7 + slot * 0.11) * jR;
+      pL = vL * 3.1;
+      pR = vR * 3.1;
+      cL = 3.15;
+      cR = 3.12;
+      fL = 285;
+      fR = 290;
     } else if (scenario === 'pothole_clip') {
-      const cycle = elapsedMs % 4500;
-      if (w === 0 && cycle >= 600 && cycle < 850) {
-        rms = 215;
-        peak = 890;
-        bL = 0.49;
-        bM = 0.36;
-        bH = 0.15;
-        fDom = 415;
-        fCent = 1180;
-        ton = 3.4;
-        kurt = 7.4;
-        clip = true;
-      } else if (w === 2 && cycle >= 850 && cycle < 1100) {
-        rms = 185;
-        peak = 720;
-        bL = 0.46;
-        bM = 0.37;
-        bH = 0.17;
-        fDom = 440;
-        fCent = 1220;
-        ton = 3.5;
-        kurt = 5.6;
+      const cyc = elapsedMs % 5000;
+      if (slot === 4 && cyc >= 700 && cyc < 1100) {
+        vL = 5.9;
+        pL = 24.5;
+        cL = 6.2;
+        clipL = true;
+        fL = 410;
       }
-    } else if (scenario === 'brake_drag_heat') {
-      if (w === 1) {
-        rms = 158 * jitter;
-        peak = rms * 2.85;
-        bL = 0.09;
-        bM = 0.25;
-        bH = 0.66;
-        fDom = 3450;
-        fCent = 4150;
-        ton = 8.9;
-        kurt = 3.3;
-        tempC = 78.4;
+    } else if (scenario === 'brake_drag_p2l') {
+      if (slot === 4) {
+        // Trailer Axle 2 Left (P2-L) sticking brake caliper
+        const ramp = Math.min(1.0, elapsedMs / 9000);
+        tL = 58.0 + ramp * 44.0; // Ramps from 58°C (YELLOW ΔT) to 102°C (RED!)
+        vL = (3.9 + ramp * 2.6) * jL;
+        pL = vL * 2.9;
+        fL = 3420;
       }
-    } else if (scenario === 'bearing_wear') {
-      if (w === 3) {
-        rms = 142 * jitter;
-        peak = rms * 2.80;
-        bL = 0.13;
-        bM = 0.61;
-        bH = 0.26;
-        fDom = 1480;
-        fCent = 1890;
-        ton = 9.1;
-        kurt = 3.5;
-        tempC = 54.2;
+    } else if (scenario === 'bearing_t2r') {
+      if (slot === 2) {
+        // Tractor Rear Axle Right (T2-R) hub bearing wear
+        tR = 62.5;
+        vR = 4.65 * jR;
+        pR = vR * 2.85;
+        fR = 1480;
       }
-    } else if (scenario === 'dead_piezo') {
-      rms = w === 2 ? 0.6 : 46.0 * jitter;
-      peak = w === 2 ? 1.5 : rms * 2.6;
-      if (w === 2) {
-        fDom = 0;
-        fCent = 0;
-        ton = 1.0;
+    } else if (scenario === 'shadow_early') {
+      if (slot === 3) {
+        // Subtle drift below YELLOW threshold -> silently captured in SHADOW mode!
+        tL = 46.5;
+        vL = 2.25 * jL;
+        fL = 960;
       }
-    } else if (scenario === 'vref_fault') {
-      if (w === 0) {
-        dcOffsetMv = 740.0;
-        rms = 112.0;
-        peak = 310.0;
+    } else if (scenario === 'sht40_vref_fault') {
+      if (slot === 1) {
+        vrefL = 780.0; // Broken Vref divider on MCP6002
       }
-      if (w === 2) {
-        humidityPct = 91.5;
+      if (slot === 4) {
+        shtOkL = false;
+        rhR = 92.4; // Condensation inside enclosure
       }
     }
 
+    const mvL = Number((vL / 0.045).toFixed(1));
+    const mvR = Number((vR / 0.045).toFixed(1));
+
     packets.push({
-      type: 'techbit_node',
+      type: 'techbit_c3_node',
       mcu: 'SIM_ESP32-C3',
-      wheelId: w,
+      nodeId: nodeIds[slot - 1],
+      slot,
+      fromTrailer: slot >= 3,
       tsMs: elapsedMs,
-      rmsMv: Number(rms.toFixed(2)),
-      peakMv: Number(peak.toFixed(2)),
-      dcOffsetMv: Number(dcOffsetMv.toFixed(1)),
-      crestFactor: Number((rms > 0.5 ? peak / rms : 1.0).toFixed(2)),
-      kurtosis: Number(kurt.toFixed(2)),
-      bandLowRatio: bL,
-      bandMidRatio: bM,
-      bandHighRatio: bH,
-      dominantFreqHz: Math.round(fDom),
-      spectralCentroidHz: Math.round(fCent),
-      tonalityRatio: Number(ton.toFixed(2)),
-      zeroCrossingsHz: Math.round(fDom),
-      surgeClipping: clip,
-      tempC: Number(tempC.toFixed(2)),
-      humidityPct: Number(humidityPct.toFixed(1)),
-      sht40Ok,
-      canReady: true,
-      canTx: tickIdx * 2,
-      canRx: 1,
-      canErr: 0,
-      canBusOff: 0,
-      adcDropped: 0,
-      spectrum: buildSimulatedSpectrum(bL, bM, bH, rms, fDom, phase + w),
+      left: {
+        rmsMv: mvL,
+        rmsMmS: Number(vL.toFixed(2)),
+        peakMmS: Number(pL.toFixed(2)),
+        crest: Number(cL.toFixed(2)),
+        dcOffsetMv: Number(vrefL.toFixed(1)),
+        fDomHz: Math.round(fL),
+        clip: clipL,
+        tempC: Number(tL.toFixed(1)),
+        rh: Number(rhL.toFixed(1)),
+        shtOk: shtOkL,
+        spectrum: buildSimSpectrum(mvL, fL, rough, phase + slot),
+      },
+      right: {
+        rmsMv: mvR,
+        rmsMmS: Number(vR.toFixed(2)),
+        peakMmS: Number(pR.toFixed(2)),
+        crest: Number(cR.toFixed(2)),
+        dcOffsetMv: Number(vrefR.toFixed(1)),
+        fDomHz: Math.round(fR),
+        clip: clipR,
+        tempC: Number(tR.toFixed(1)),
+        rh: Number(rhR.toFixed(1)),
+        shtOk: shtOkR,
+        spectrum: buildSimSpectrum(mvR, fR, rough, phase + slot + 2),
+      },
+      i2c: { sda: 8, scl: 9, addr: shtOkL ? '0x44' : 'ERR', err: shtOkL ? 0 : 2 },
+      can: { ready: true, tx: tickIdx * 2, err: 0 },
     });
   }
+
   return packets;
 }
 
@@ -227,10 +227,7 @@ function readJsonBody(req, maxBytes = 65536) {
     });
     req.on('end', () => {
       const raw = Buffer.concat(chunks).toString('utf-8').trim();
-      if (!raw) {
-        resolve({});
-        return;
-      }
+      if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
       } catch (err) {
@@ -242,18 +239,17 @@ function readJsonBody(req, maxBytes = 65536) {
 }
 
 function sendJson(res, statusCode, data) {
-  const body = JSON.stringify(data);
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });
-  res.end(body);
+  res.end(JSON.stringify(data));
 }
 
 function createServer(options = {}) {
-  const engine = new WheelClassifierEngine(options.engineConfig || {});
+  const engine = new TechBitV2Engine(options.engineConfig || {});
   const sseClients = new Set();
   const pendingEspCommands = [];
   const rawLogs = [];
@@ -278,7 +274,7 @@ function createServer(options = {}) {
       tag,
       text: String(text).slice(0, 320),
     });
-    if (rawLogs.length > 40) rawLogs.shift();
+    if (rawLogs.length > 50) rawLogs.shift();
   }
 
   function queueEspCommand(cmd) {
@@ -287,16 +283,6 @@ function createServer(options = {}) {
     pendingEspCommands.push({ cmd: clean, createdAt: Date.now() });
     if (pendingEspCommands.length > 16) pendingEspCommands.shift();
     addLog('CMD->ESP', clean);
-
-    if (sourceMeta.mode === 'ip_poll' && sourceMeta.espPollUrl) {
-      const base = sourceMeta.espPollUrl.replace(/\/api\/telemetry.*$/, '');
-      fetch(`${base}/api/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cmd: clean }),
-        signal: AbortSignal.timeout(400),
-      }).catch(() => {});
-    }
   }
 
   function popEspCommands() {
@@ -304,11 +290,30 @@ function createServer(options = {}) {
     const out = [];
     while (pendingEspCommands.length > 0) {
       const item = pendingEspCommands.shift();
-      if (now - item.createdAt <= 12000) {
-        out.push(item.cmd);
-      }
+      if (now - item.createdAt <= 12000) out.push(item.cmd);
     }
     return out;
+  }
+
+  function ingestTelemetryObject(obj, sourceKind, senderLabel = null, slotOverride = null) {
+    const now = Date.now();
+    // Live hardware automatically supersedes simulator (Truthfulness guarantee)
+    if (sourceKind !== 'simulator' && sourceMeta.mode === 'simulator') {
+      sourceMeta.mode = sourceKind;
+      sourceMeta.simStartedAt = null;
+      addLog('SYSTEM', `Живий пакет (${sourceKind}) автоматично вимкнув симулятор.`);
+    } else if (sourceKind !== 'simulator' || sourceMeta.mode === 'simulator') {
+      sourceMeta.mode = sourceKind;
+    }
+
+    const ok = engine.ingestPacket(obj, now, slotOverride);
+    if (ok) {
+      sourceMeta.lastPacketAt = now;
+      sourceMeta.packetCount += 1;
+      sourceMeta.packetsWindow += 1;
+      if (senderLabel) sourceMeta.senderIp = senderLabel;
+    }
+    return ok;
   }
 
   function buildStatePayload(port) {
@@ -317,241 +322,166 @@ function createServer(options = {}) {
     const activePort = port || 5050;
     return {
       ...snap,
-      sourceMeta: {
+      source: {
         ...sourceMeta,
-        lastPacketAgeMs: sourceMeta.lastPacketAt ? Math.max(0, now - sourceMeta.lastPacketAt) : null,
+        wifiUrls: getLanUrls(activePort),
       },
-      networkUrls: getLanUrls(activePort),
-      recentLogs: rawLogs.slice(-15),
+      logs: rawLogs.slice(-25),
     };
   }
 
-  let lastBroadcastAt = 0;
-  function broadcastState(port, force = false) {
+  function broadcastState(port) {
     if (sseClients.size === 0) return;
-    const now = Date.now();
-    if (!force && now - lastBroadcastAt < 65) return;
-    lastBroadcastAt = now;
-    const payload = `data: ${JSON.stringify(buildStatePayload(port))}\n\n`;
+    const msg = `data: ${JSON.stringify(buildStatePayload(port))}\n\n`;
     for (const client of sseClients) {
-      client.write(payload);
+      try {
+        client.write(msg);
+      } catch (err) {
+        sseClients.delete(client);
+      }
     }
-  }
-
-  function ingestTelemetryObject(obj, sourceKind, senderIp) {
-    const now = Date.now();
-    let ok = false;
-    if (obj && obj.type === 'techbit_hub' && Array.isArray(obj.wheels)) {
-      ok = engine.ingestHubPacket(obj, now);
-    } else if (obj && (obj.wheelId !== undefined || obj.rmsMv !== undefined)) {
-      ok = engine.ingestNodePacket(obj, now);
-    }
-
-    if (!ok) return false;
-
-    // Auto-stop simulator immediately if physical hardware sends data
-    if (sourceKind !== 'simulator' && sourceMeta.mode === 'simulator') {
-      sourceMeta.simStartedAt = null;
-      addLog('SYSTEM', 'Симулятор автоматично вимкнено: отримано реальний пакет ESP32-C3');
-    }
-
-    sourceMeta.mode = sourceKind;
-    sourceMeta.lastPacketAt = now;
-    sourceMeta.packetCount += 1;
-    sourceMeta.packetsWindow += 1;
-    if (senderIp) sourceMeta.senderIp = senderIp;
-    engine.update(now);
-    return true;
   }
 
   const server = http.createServer(async (req, res) => {
-    const parsedUrl = new URL(req.url, 'http://localhost');
-    const pathname = parsedUrl.pathname;
-    const boundPort = server.address() ? server.address().port : 5050;
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const pathname = urlObj.pathname;
+    const boundPort = server.address()?.port || 5050;
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       });
       res.end();
       return;
     }
 
-    if (req.method === 'GET' && pathname === '/api/state') {
-      engine.update(Date.now());
-      sendJson(res, 200, buildStatePayload(boundPort));
-      return;
-    }
-
-    if (req.method === 'GET' && pathname === '/api/stream') {
+    // SSE real-time stream
+    if (req.method === 'GET' && pathname === '/api/events') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
         'Access-Control-Allow-Origin': '*',
       });
-      res.write(`data: ${JSON.stringify(buildStatePayload(boundPort))}\n\n`);
       sseClients.add(res);
-      req.on('close', () => {
-        sseClients.delete(res);
-      });
+      res.write(`data: ${JSON.stringify(buildStatePayload(boundPort))}\n\n`);
+      req.on('close', () => sseClients.delete(res));
       return;
     }
 
+    if (req.method === 'GET' && pathname === '/api/state') {
+      return sendJson(res, 200, buildStatePayload(boundPort));
+    }
+
+    if (req.method === 'GET' && pathname === '/api/export.csv') {
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="techbit_v2_ground_truth.csv"',
+      });
+      res.end(engine.exportGroundTruthCsv());
+      return;
+    }
+
+    // Telemetry ingest (Wi-Fi push from ESP32 or Web Serial relay from Browser)
     if (req.method === 'POST' && pathname === '/api/telemetry') {
       try {
         const body = await readJsonBody(req);
-        const senderIp = req.socket.remoteAddress || null;
-        let sourceKind = 'wifi';
-        let payload = body;
-        if (body && body.payload && typeof body.payload === 'object') {
-          sourceKind = body.source === 'serial' ? 'serial' : 'wifi';
-          payload = body.payload;
-        }
-
-        const ok = ingestTelemetryObject(payload, sourceKind, senderIp);
-        if (!ok) {
-          sendJson(res, 400, { ok: false, error: 'Unsupported or incomplete telemetry JSON' });
-          return;
-        }
+        const source = body._source === 'serial' ? 'serial' : 'wifi';
+        const slotOverride = body._slotOverride || null;
+        const ok = ingestTelemetryObject(body, source, req.socket.remoteAddress, slotOverride);
+        engine.update(Date.now());
         broadcastState(boundPort);
-        sendJson(res, 200, { ok: true, commands: popEspCommands() });
+        return sendJson(res, ok ? 200 : 400, {
+          ok,
+          commands: popEspCommands(),
+        });
       } catch (err) {
-        sendJson(res, 400, { ok: false, error: err.message });
+        return sendJson(res, 400, { ok: false, error: err.message });
       }
-      return;
     }
 
+    // Workbench commands (reset, mute, simulator, ip_poll, config, resolve_ticket, raw)
     if (req.method === 'POST' && pathname === '/api/command') {
       try {
         const body = await readJsonBody(req);
-        const action = String(body.action || '');
-        const now = Date.now();
+        const { action } = body;
 
-        if (action === 'cal') {
-          engine.startCalibration(now);
-          queueEspCommand('cal');
-        } else if (action === 'reset') {
-          engine.resetFaultLatches();
-          queueEspCommand('reset');
-        } else if (action === 'mute') {
-          engine.toggleBuzzerMute();
-          queueEspCommand('mute');
+        if (action === 'reset') {
+          engine.resetAlerts();
+          addLog('CMD', 'Скинуто зафіксовані тривоги й лічильник ям.');
         } else if (action === 'clear') {
-          engine.resetAll();
-          pendingEspCommands.length = 0;
-          rawLogs.length = 0;
+          engine.reset();
           sourceMeta.mode = 'waiting';
-          sourceMeta.lastPacketAt = null;
           sourceMeta.packetCount = 0;
-          sourceMeta.packetsPerSec = 0;
-          sourceMeta.senderIp = null;
-          sourceMeta.espPollUrl = null;
-          sourceMeta.espPollError = null;
-          addLog('SYSTEM', 'Буфери та стани очищено — очікування ESP32-C3');
+          sourceMeta.simStartedAt = null;
+          addLog('CMD', 'Стан стенду очищено.');
+        } else if (action === 'mute') {
+          const muted = engine.toggleMute();
+          addLog('CMD', `Зумер кабіни: ${muted ? 'ВИМКНЕНО (MUTE)' : 'УВІМКНЕНО'}`);
+        } else if (action === 'config' && body.config) {
+          engine.updateConfig(body.config);
+          addLog('CFG', `Оновлено пороги v${engine.config.configVersion}`);
+        } else if (action === 'resolve_ticket') {
+          const tkt = engine.resolveIncident(body.ticketId, body.resolutionCode);
+          if (tkt) addLog('TICKET', `${tkt.ticket_id} закрито -> ${tkt.resolution_code}`);
         } else if (action === 'simulator') {
-          const enabled = Boolean(body.enabled);
-          if (enabled) {
-            const scenario = SIM_SCENARIOS.includes(body.scenario) ? body.scenario : 'smooth';
-            engine.resetAll();
+          if (body.enabled) {
             sourceMeta.mode = 'simulator';
-            sourceMeta.simScenario = scenario;
-            sourceMeta.simStartedAt = now;
+            sourceMeta.simScenario = SIM_SCENARIOS.includes(body.scenario) ? body.scenario : 'smooth';
+            sourceMeta.simStartedAt = Date.now();
             sourceMeta.simTick = 0;
-            sourceMeta.espPollUrl = null;
-            addLog('SIM', `Запущено стендовий симулятор: ${scenario}`);
+            // Fast 6-second YELLOW confirm during bench simulator unless explicitly overridden
+            if (engine.config.yellowConfirmSec === 60) {
+              engine.updateConfig({ yellowConfirmSec: 6 });
+            }
+            addLog('SIM', `Симулятор запущено: ${sourceMeta.simScenario} (YELLOW гістерезис 6 с для тесту)`);
           } else {
-            engine.resetAll();
             sourceMeta.mode = 'waiting';
             sourceMeta.simStartedAt = null;
-            sourceMeta.lastPacketAt = null;
-            addLog('SIM', 'Симулятор зупинено');
+            addLog('SIM', 'Симулятор зупинено.');
           }
-        } else if (action === 'esp_command') {
-          queueEspCommand(body.rawCmd);
-        } else {
-          sendJson(res, 400, { ok: false, error: `Unknown action: ${action}` });
-          return;
+        } else if (action === 'ip_poll') {
+          if (body.url) {
+            const cleanUrl = String(body.url).trim();
+            sourceMeta.espPollUrl = cleanUrl.startsWith('http')
+              ? cleanUrl
+              : `http://${cleanUrl}/api/telemetry`;
+            sourceMeta.mode = 'ip_poll';
+            sourceMeta.espPollError = null;
+            addLog('POLL', `Опитування ${sourceMeta.espPollUrl}`);
+          } else {
+            sourceMeta.espPollUrl = null;
+            sourceMeta.mode = 'waiting';
+          }
+        } else if (action === 'raw' && body.cmd) {
+          queueEspCommand(body.cmd);
         }
 
-        broadcastState(boundPort, true);
-        sendJson(res, 200, { ok: true, state: buildStatePayload(boundPort) });
-      } catch (err) {
-        sendJson(res, 400, { ok: false, error: err.message });
-      }
-      return;
-    }
-
-    if (req.method === 'POST' && pathname === '/api/config') {
-      try {
-        const body = await readJsonBody(req);
-        engine.updateConfig(body);
         engine.update(Date.now());
-        addLog('CONFIG', 'Оновлено пороги / базові рівні');
-        broadcastState(boundPort, true);
-        sendJson(res, 200, { ok: true, config: engine.config });
+        broadcastState(boundPort);
+        return sendJson(res, 200, { ok: true, state: buildStatePayload(boundPort) });
       } catch (err) {
-        sendJson(res, 400, { ok: false, error: err.message });
+        return sendJson(res, 400, { ok: false, error: err.message });
       }
+    }
+
+    // Static files from public/
+    const relPath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+    const safePath = path.normalize(path.join(PUBLIC_DIR, relPath));
+    if (safePath.startsWith(PUBLIC_DIR) && fs.existsSync(safePath) && fs.statSync(safePath).isFile()) {
+      const ext = path.extname(safePath);
+      res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+      fs.createReadStream(safePath).pipe(res);
       return;
     }
 
-    if (req.method === 'POST' && pathname === '/api/esp-proxy') {
-      try {
-        const body = await readJsonBody(req);
-        if (!body.enabled || !body.url) {
-          sourceMeta.espPollUrl = null;
-          sourceMeta.espPollError = null;
-          if (sourceMeta.mode === 'ip_poll') sourceMeta.mode = 'waiting';
-          addLog('IP_POLL', 'Опитування ESP32-C3 IP вимкнено');
-        } else {
-          let target = String(body.url).trim();
-          if (!/^https?:\/\//i.test(target)) target = `http://${target}`;
-          if (!target.endsWith('/api/telemetry')) {
-            target = `${target.replace(/\/+$/, '')}/api/telemetry`;
-          }
-          sourceMeta.espPollUrl = target;
-          sourceMeta.espPollError = null;
-          sourceMeta.mode = 'ip_poll';
-          addLog('IP_POLL', `Підключення до ${target}`);
-        }
-        broadcastState(boundPort, true);
-        sendJson(res, 200, { ok: true, espPollUrl: sourceMeta.espPollUrl });
-      } catch (err) {
-        sendJson(res, 400, { ok: false, error: err.message });
-      }
-      return;
-    }
-
-    // Serve static frontend files cleanly
-    if (req.method === 'GET') {
-      const safeRel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-      const fullPath = path.resolve(PUBLIC_DIR, safeRel);
-      if (!fullPath.startsWith(PUBLIC_DIR)) {
-        res.writeHead(403);
-        res.end('Forbidden');
-        return;
-      }
-      fs.readFile(fullPath, (err, content) => {
-        if (err) {
-          res.writeHead(404);
-          res.end('Not found');
-          return;
-        }
-        const ext = path.extname(fullPath);
-        res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
-        res.end(content);
-      });
-      return;
-    }
-
-    res.writeHead(404);
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Not found');
   });
 
-  // Periodic loop: packet rate meter, timeout watchdog, optional simulator & IP poller
+  // Periodic background timers
   let ppsTimer = null;
   let tickTimer = null;
   let pollInFlight = false;
@@ -564,32 +494,19 @@ function createServer(options = {}) {
 
     tickTimer = setInterval(async () => {
       const now = Date.now();
-      const boundPort = server.address() ? server.address().port : 5050;
+      const boundPort = server.address()?.port || 5050;
 
-      if (sourceMeta.mode === 'simulator' && sourceMeta.simStartedAt !== null) {
+      if (sourceMeta.mode === 'simulator') {
+        const elapsed = now - (sourceMeta.simStartedAt || now);
         sourceMeta.simTick += 1;
-        const pkts = generateSimulatorPackets(
-          sourceMeta.simScenario,
-          now - sourceMeta.simStartedAt,
-          sourceMeta.simTick
-        );
-        for (const p of pkts) {
-          engine.ingestNodePacket(p, now);
+        const simPkts = generateV2SimPackets(sourceMeta.simScenario, elapsed, sourceMeta.simTick);
+        for (const p of simPkts) {
+          ingestTelemetryObject(p, 'simulator', 'SIMULATOR');
         }
-        sourceMeta.lastPacketAt = now;
-        sourceMeta.packetCount += pkts.length;
-        sourceMeta.packetsWindow += pkts.length;
-        engine.update(now);
-        broadcastState(boundPort);
-        return;
-      }
-
-      if (sourceMeta.mode === 'ip_poll' && sourceMeta.espPollUrl && !pollInFlight) {
+      } else if (sourceMeta.mode === 'ip_poll' && sourceMeta.espPollUrl && !pollInFlight) {
         pollInFlight = true;
         try {
-          const resp = await fetch(sourceMeta.espPollUrl, {
-            signal: AbortSignal.timeout(350),
-          });
+          const resp = await fetch(sourceMeta.espPollUrl, { signal: AbortSignal.timeout(350) });
           if (resp.ok) {
             const json = await resp.json();
             if (json && json.status !== 'waiting') {
@@ -606,10 +523,9 @@ function createServer(options = {}) {
         }
       }
 
-      // Always tick timeout watchdog so offline wheels honestly show OFFLINE after nodeTimeoutMs
       engine.update(now);
       broadcastState(boundPort);
-    }, 100);
+    }, 200);
   }
 
   server.on('close', () => {
@@ -626,7 +542,7 @@ if (require.main === module) {
   const PORT = Number(process.env.PORT) || 5050;
   const { server } = createServer();
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n[TechBIT Test Workbench] http://localhost:${PORT}`);
+    console.log(`\n[TechBIT v2 Test Workbench] http://localhost:${PORT}`);
     const urls = getLanUrls(PORT);
     if (urls.length > 0) {
       console.log(`[TechBIT Wi-Fi Telemetry Endpoint] ${urls.join(' | ')}`);
@@ -634,4 +550,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer, generateSimulatorPackets };
+module.exports = { createServer, generateV2SimPackets };
