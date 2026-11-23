@@ -85,7 +85,7 @@ void saveMappingAndIdsToNvs() {
 }
 
 void loadStateFromNvs() {
-    g_prefs.begin("tb_s3", true);
+    g_prefs.begin("tb_s3", false);
     String trId = g_prefs.getString("tractor_id", "TR_001");
     String tlId = g_prefs.getString("trailer_id", "");
     g_rules.setAssetIds(trId.c_str(), tlId.c_str());
@@ -229,6 +229,61 @@ void triggerBlackBoxUpload(const rules::BurstTriggerEvent& trig, uint32_t nowMs)
                   sevStr, trig.wheelCode, trig.reason, tsUtc, jsonBuf);
 }
 
+bool                    g_serialJson    = true;
+
+void publishS3WorkbenchJson() {
+    const auto& ind = g_rules.indicator();
+    const char* sev = (ind.driverSeverity == rules::SEV_RED)
+                          ? "RED"
+                          : (ind.driverSeverity == rules::SEV_YELLOW ? "YELLOW" : "GREEN");
+    static char buf[1200];
+    size_t pos = static_cast<size_t>(std::snprintf(
+        buf, sizeof(buf),
+        "{\"type\":\"techbit_s3_master\",\"mcu\":\"ESP32-S3\",\"deviceId\":\"%s\","
+        "\"tractorId\":\"%s\",\"trailerId\":\"%s\",\"severity\":\"%s\",\"wheelCode\":\"%s\","
+        "\"buzzerOn\":%s,\"activeNodes\":%u,\"offlineNodes\":%u,\"blackBoxRecs\":%u,"
+        "\"bleActive\":%s,\"lteOnline\":%s,\"pendingQueue\":%u,\"shadow\":%s,\"nodes\":[",
+        g_deviceId,
+        g_rules.tractorId(),
+        g_rules.trailerId()[0] ? g_rules.trailerId() : "",
+        sev,
+        ind.wheelCode,
+        ind.buzzerOn ? "true" : "false",
+        static_cast<unsigned>(ind.activeNodeCount),
+        static_cast<unsigned>(ind.offlineNodeCount),
+        static_cast<unsigned>(g_blackBox.size()),
+        g_ble.isActive() ? "true" : "false",
+        g_lte.isModemOnline() ? "true" : "false",
+        static_cast<unsigned>(g_lte.pendingCount()),
+        g_rules.config().shadowModeEnabled ? "true" : "false"));
+
+    bool first = true;
+    const auto* nodes = g_rules.nodes();
+    for (uint8_t i = 0; i < kMaxTrackedNodes && pos + 110 < sizeof(buf); ++i) {
+        if (!nodes[i].used) continue;
+        char nid[12];
+        can2::formatNodeIdString(nodes[i].telemetry.nodeId, nid);
+        pos += static_cast<size_t>(std::snprintf(
+            buf + pos, sizeof(buf) - pos,
+            "%s{\"id\":\"%s\",\"slot\":%u,\"online\":%s,\"trailer\":%s,"
+            "\"tL\":%.1f,\"tR\":%.1f,\"vL\":%.2f,\"vR\":%.2f,\"fL\":%u,\"fR\":%u}",
+            first ? "" : ",",
+            nid,
+            static_cast<unsigned>(nodes[i].slot),
+            nodes[i].online ? "true" : "false",
+            nodes[i].fromTrailer ? "true" : "false",
+            nodes[i].telemetry.tempLeftC,
+            nodes[i].telemetry.tempRightC,
+            nodes[i].telemetry.vibRmsLeft,
+            nodes[i].telemetry.vibRmsRight,
+            static_cast<unsigned>(nodes[i].telemetry.domFreqLeftHz),
+            static_cast<unsigned>(nodes[i].telemetry.domFreqRightHz)));
+        first = false;
+    }
+    std::snprintf(buf + pos, sizeof(buf) - pos, "]}");
+    Serial.println(buf);
+}
+
 void printStatus() {
     const auto& ind = g_rules.indicator();
     const auto& cfg = g_rules.config();
@@ -251,10 +306,20 @@ void printStatus() {
 void handleSerialCmd(const char* line) {
     if (std::strcmp(line, "status") == 0) {
         printStatus();
+    } else if (std::strcmp(line, "json") == 0) {
+        g_serialJson = true;
+    } else if (std::strcmp(line, "human") == 0) {
+        g_serialJson = false;
     } else if (std::strcmp(line, "ble on") == 0) {
         g_ble.enableFor15Min(millis(), &g_rules);
     } else if (std::strcmp(line, "ble off") == 0) {
         g_ble.disable();
+    } else if (std::strncmp(line, "tractor ", 8) == 0) {
+        g_rules.setAssetIds(line + 8, g_rules.trailerId());
+        saveMappingAndIdsToNvs();
+    } else if (std::strncmp(line, "trailer ", 8) == 0) {
+        g_rules.setAssetIds(g_rules.tractorId(), line + 8);
+        saveMappingAndIdsToNvs();
     } else if (std::strncmp(line, "cfg ", 4) == 0) {
         if (rules::applyJsonConfigUpdate(line + 4, g_rules.config())) {
             saveConfigToNvs();
@@ -410,6 +475,9 @@ void loop() {
         const rules::BurstTriggerEvent trig = g_rules.update(nowMs);
         if (trig.triggered) {
             triggerBlackBoxUpload(trig, nowMs);
+        }
+        if (g_serialJson) {
+            publishS3WorkbenchJson();
         }
     }
 

@@ -44,12 +44,14 @@ bool MultiAdcDmaSampler::begin(uint32_t perChannelRateHz) {
         return false;
     }
 
+    // In ESP-IDF 4.4 (Arduino-ESP32 2.x), ADC_UNIT_1 enum is 1, but
+    // adc_digi_pattern_config_t.unit uses a 0-based index (0 = ADC1, 1 = ADC2).
     const int pins[4] = { PIN_VIB_LEFT_ADC, PIN_VIB_RIGHT_ADC, PIN_TEMP_LEFT_ADC, PIN_TEMP_RIGHT_ADC };
     adc_digi_pattern_config_t patterns[4] = {};
     for (int i = 0; i < 4; ++i) {
         patterns[i].atten     = ADC_ATTEN_DB_12;
         patterns[i].channel   = static_cast<uint8_t>(pins[i]);
-        patterns[i].unit      = ADC_UNIT_1;
+        patterns[i].unit      = 0;
         patterns[i].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
     }
 
@@ -85,12 +87,14 @@ bool MultiAdcDmaSampler::begin(uint32_t perChannelRateHz) {
         return false;
     }
 
+    // In ESP-IDF 4.4 (Arduino-ESP32 2.x), ADC_UNIT_1 enum is 1, but
+    // adc_digi_pattern_config_t.unit uses a 0-based index (0 = ADC1, 1 = ADC2).
     const int pins[4] = { PIN_VIB_LEFT_ADC, PIN_VIB_RIGHT_ADC, PIN_TEMP_LEFT_ADC, PIN_TEMP_RIGHT_ADC };
     adc_digi_pattern_config_t patterns[4] = {};
     for (int i = 0; i < 4; ++i) {
         patterns[i].atten     = ADC_ATTEN_DB_12;
         patterns[i].channel   = static_cast<uint8_t>(pins[i]);
-        patterns[i].unit      = ADC_UNIT_1;
+        patterns[i].unit      = 0;
         patterns[i].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
     }
 

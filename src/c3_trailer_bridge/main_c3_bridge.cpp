@@ -125,7 +125,7 @@ void setup() {
     Serial.begin(115200);
     delay(300);
 
-    g_prefs.begin("tb_bridge", true);
+    g_prefs.begin("tb_bridge", false);
     String savedId = g_prefs.getString("trailer_id", "TL_042");
     std::snprintf(g_trailerId, sizeof(g_trailerId), "%s", savedId.c_str());
     if (g_prefs.getBytesLength("s3_mac") == 6) {
@@ -199,6 +199,13 @@ void loop() {
         if (nCount > 0) {
             esp_now_send(g_s3PeerMac, reinterpret_cast<const uint8_t*>(&pkt), sizeof(pkt));
         }
+
+        Serial.printf("{\"type\":\"techbit_trailer_bridge\",\"mcu\":\"ESP32-C3\",\"trailerId\":\"%s\",\"paired\":%s,\"seq\":%u,\"nodeCount\":%u,\"canRx\":%lu}\n",
+                      g_trailerId,
+                      g_s3Paired ? "true" : "false",
+                      static_cast<unsigned>(g_espSeq),
+                      static_cast<unsigned>(nCount),
+                      static_cast<unsigned long>(g_can.rxCount()));
     }
 
     // 3. Discovery beacon if unpaired or pair button pressed (Drop & Hook auto-discovery)
