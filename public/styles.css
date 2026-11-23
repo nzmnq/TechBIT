@@ -1,21 +1,21 @@
 /* ==========================================================================
-   TechBIT v2.0 Diagnostics Workbench — Polished under `better-ui`
+   TechBIT v2.1 Single-Page Diagnostics Workbench — Polished under `better-ui`
    --------------------------------------------------------------------------
-   Exact surface & motion invariants enforced throughout this file:
-   1. Concentric border radius: outerRadius = innerRadius + padding + borderWidth
-      - .surface (pad 12px, border 1px, r 22px) -> inner wells/inputs/btns (r 9px)
-      - .axle-card (pad 8px, border 1px, r 20px) -> .wheel-tile (r 11px)
-      - .cabin-bar (pad 10px, border 1px, r 20px) -> inner units (r 9px)
-      - .tablist (pad 4px, border 1px, r 14px) -> .tab-btn (r 9px)
-      - .port-row (pad 6px, border 1px, r 14px) -> sm controls (r 7px)
+   Exact surface & motion invariants enforced throughout:
+   1. Concentric radii: outerRadius = innerRadius + padding + borderWidth
+      - .surface (r 22px, pad 12px, border 1px) -> inner wells/inputs/btns (r 9px)
+      - .seg-control (r 13px, pad 3px, border 1px) -> .seg-btn (r 9px)
+      - .asset-group (r 24px, pad 9px, border 1px) -> .axle-card (r 14px, pad 6px) -> .wheel-tile (r 7px)
+      - .cabin-bar (r 20px, pad 10px, border 1px) -> .cabin-led-unit / .cabin-chip (r 9px)
+      - .port-row (r 14px, pad 6px, border 1px) -> .btn-sm / .select-sm (r 7px)
    2. Layered shadow rings + `border: 1px solid transparent` for forced-colors;
-      real visible borders on dividers, table cells, selected states, and inputs.
+      visible borders on form inputs (>=3:1), dividers, table cells, selected states.
    3. Optical alignment: icon-leading buttons use 2px less inline-start padding;
-      play triangle shifted +1px optically along X.
-   4. Press scale = 0.96 over 150ms ease-out with :not(:disabled):active, gated
-      inside @media (prefers-reduced-motion: no-preference).
-   5. Hover styling strictly inside @media (hover: hover).
-   6. Exact transition-property lists (zero `transition: all`).
+      play triangle nudged +1px along X.
+   4. Press scale = 0.96 over 150ms ease-out with :not(:disabled):active under
+      @media (prefers-reduced-motion: no-preference).
+   5. Hover effects strictly inside @media (hover: hover).
+   6. Exact transition-property lists (zero wildcard transitions).
    7. Scroll containment (`overscroll-behavior: contain`) on scrollable panels.
    ========================================================================== */
 
@@ -31,7 +31,6 @@
   --text-muted: #6f7c93;
 
   --accent: #38bdf8;
-  --accent-strong: #0ea5e9;
   --accent-soft: oklch(0.75 0.14 230 / 0.14);
 
   --green: #22c55e;
@@ -78,6 +77,20 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 html,
 body {
   margin: 0;
@@ -103,7 +116,7 @@ pre,
   font-variant-numeric: tabular-nums;
 }
 
-/* SVG Icons: single unified stroke system, non-scaling-stroke */
+/* Unified SVG Icon System */
 svg.ico {
   width: 18px;
   height: 18px;
@@ -125,24 +138,30 @@ svg.ico * {
   vector-effect: non-scaling-stroke;
 }
 
-/* Optical shift for play triangle toward its point */
+/* Optical nudge for play triangle */
 .icon-play {
   transform: translateX(1px);
 }
 
 /* ==========================================================================
-   Layout Shell & Surface Primitives
+   Layout Shell & Surface Primitive
    ========================================================================== */
 .app-shell {
-  max-width: 1480px;
+  max-width: 1540px;
   margin: 0 auto;
-  padding: 18px 20px 40px;
+  padding: 16px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spa-main {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-/* Outer surface: r = 22px, pad = 12px, transparent border = 1px -> inner r = 9px */
+/* Outer surface: r 22px, pad 12px, border 1px -> inner r 9px */
 .surface {
   background: var(--bg-surface);
   border: 1px solid transparent;
@@ -151,7 +170,6 @@ svg.ico * {
   box-shadow: var(--shadow-surface);
 }
 
-/* Staged first-load entrance (no opacity: 0 in base rule; hidden only in `from`) */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes stage-enter {
     from {
@@ -179,26 +197,26 @@ svg.ico * {
 }
 
 /* ==========================================================================
-   Topbar
+   Topbar & SPA Quick Navigation
    ========================================================================== */
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
-  padding: 12px 16px;
+  padding: 10px 14px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
 }
 
 .brand-mark {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 9px;
   background: linear-gradient(145deg, oklch(0.32 0.08 232), oklch(0.2 0.05 245));
   color: var(--accent);
@@ -211,7 +229,7 @@ svg.ico * {
 
 .brand-copy h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16.5px;
   font-weight: 700;
   letter-spacing: -0.02em;
   display: inline-flex;
@@ -222,7 +240,7 @@ svg.ico * {
 .brand-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -238,7 +256,7 @@ svg.ico * {
 
 .coupling-tag {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--text-secondary);
   background: var(--bg-well);
@@ -250,24 +268,65 @@ svg.ico * {
 
 .brand-sub {
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-secondary);
+}
+
+.spa-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border: 1px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, color, border-color;
+  transition-duration: 120ms;
+  transition-timing-function: var(--ease-ui);
+}
+
+@media (hover: hover) {
+  .nav-link:hover {
+    background: oklch(1 0 0 / 0.05);
+    color: var(--text-primary);
+  }
+}
+
+.nav-counter {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--red-soft);
+  color: #fca5a5;
+  padding: 1px 6px;
+  border-radius: 6px;
 }
 
 .topbar-meta {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .source-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 7px;
+  padding: 6px 11px;
   border-radius: 9px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.03em;
   background: var(--bg-well);
@@ -315,12 +374,12 @@ svg.ico * {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-inline-start: 12px;
+  padding-inline-start: 10px;
   border-inline-start: 1px solid var(--border-structural);
 }
 
 .meta-label {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -328,9 +387,77 @@ svg.ico * {
 
 .meta-value {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* ==========================================================================
+   Hardware Rig & Sensor Type Configurator Strip
+   ========================================================================== */
+.config-strip {
+  display: grid;
+  grid-template-columns: auto minmax(210px, 1fr) minmax(200px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.config-group,
+.config-summary-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.strip-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Outer r = 13px, pad = 3px, border = 1px -> .seg-btn r = 9px */
+.seg-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 13px;
+  background: var(--bg-well);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-well);
+  flex-wrap: wrap;
+}
+
+.seg-btn {
+  padding: 6px 11px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, color, border-color;
+  transition-duration: 120ms;
+  transition-timing-function: var(--ease-ui);
+}
+
+.seg-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  border-color: oklch(0.75 0.14 230 / 0.45);
+}
+
+@media (hover: hover) {
+  .seg-btn[aria-pressed="false"]:hover {
+    background: oklch(1 0 0 / 0.05);
+    color: var(--text-primary);
+  }
 }
 
 /* ==========================================================================
@@ -341,7 +468,7 @@ svg.ico * {
   border-radius: 20px;
   padding: 10px;
   display: grid;
-  grid-template-columns: minmax(320px, 1.45fr) minmax(300px, 1.35fr) auto;
+  grid-template-columns: minmax(310px, 1.45fr) minmax(290px, 1.3fr) auto;
   gap: 10px;
   align-items: center;
 }
@@ -349,7 +476,7 @@ svg.ico * {
 .cabin-led-unit {
   background: var(--bg-well);
   border-radius: 9px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border: 1px solid transparent;
   box-shadow: var(--shadow-well);
   display: flex;
@@ -361,8 +488,8 @@ svg.ico * {
 }
 
 .led-lamp {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
   background: #141925;
   border: 1px solid oklch(1 0 0 / 0.12);
@@ -372,8 +499,8 @@ svg.ico * {
 }
 
 .led-core {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   border-radius: 999px;
   background: #475569;
   transition-property: background-color, box-shadow;
@@ -388,9 +515,7 @@ svg.ico * {
   background: var(--green);
   box-shadow: 0 0 14px oklch(0.72 0.18 148 / 0.75);
 }
-.cabin-led-unit[data-severity="GREEN"] .led-state-text {
-  color: #86efac;
-}
+.cabin-led-unit[data-severity="GREEN"] .led-state-text { color: #86efac; }
 
 .cabin-led-unit[data-severity="YELLOW"] {
   background: oklch(0.24 0.05 78 / 0.55);
@@ -400,9 +525,7 @@ svg.ico * {
   background: var(--yellow);
   box-shadow: 0 0 16px oklch(0.79 0.17 75 / 0.85);
 }
-.cabin-led-unit[data-severity="YELLOW"] .led-state-text {
-  color: #fde68a;
-}
+.cabin-led-unit[data-severity="YELLOW"] .led-state-text { color: #fde68a; }
 
 .cabin-led-unit[data-severity="RED"] {
   background: oklch(0.23 0.07 24 / 0.65);
@@ -412,9 +535,7 @@ svg.ico * {
   background: var(--red);
   box-shadow: 0 0 18px oklch(0.64 0.22 25 / 0.95);
 }
-.cabin-led-unit[data-severity="RED"] .led-state-text {
-  color: #fecaca;
-}
+.cabin-led-unit[data-severity="RED"] .led-state-text { color: #fecaca; }
 
 .led-copy {
   flex: 1;
@@ -423,7 +544,7 @@ svg.ico * {
 
 .led-overline {
   display: block;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--text-muted);
@@ -437,9 +558,8 @@ svg.ico * {
 }
 
 .led-state-text {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
-  letter-spacing: 0.01em;
 }
 
 .led-hint {
@@ -454,8 +574,8 @@ svg.ico * {
   background: #06080c;
   border: 1px solid var(--border-structural);
   border-radius: 7px;
-  padding: 5px 11px;
-  min-width: 82px;
+  padding: 5px 10px;
+  min-width: 78px;
   text-align: center;
   flex-shrink: 0;
 }
@@ -471,20 +591,14 @@ svg.ico * {
 .wheel-code-value {
   display: block;
   font-family: var(--font-mono);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
   line-height: 1.15;
-  letter-spacing: 0.04em;
   color: var(--text-primary);
 }
 
-.cabin-led-unit[data-severity="YELLOW"] .wheel-code-value {
-  color: var(--yellow);
-}
-
-.cabin-led-unit[data-severity="RED"] .wheel-code-value {
-  color: #fca5a5;
-}
+.cabin-led-unit[data-severity="YELLOW"] .wheel-code-value { color: var(--yellow); }
+.cabin-led-unit[data-severity="RED"] .wheel-code-value { color: #fca5a5; }
 
 .cabin-telemetry-chips {
   display: grid;
@@ -495,12 +609,12 @@ svg.ico * {
 .cabin-chip {
   background: var(--bg-well);
   border-radius: 9px;
-  padding: 7px 10px;
+  padding: 6px 9px;
   border: 1px solid transparent;
   box-shadow: var(--shadow-well);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .cabin-chip[data-highlight="shadow"] {
@@ -514,7 +628,7 @@ svg.ico * {
 }
 
 .chip-label {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -522,7 +636,7 @@ svg.ico * {
 
 .chip-value {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -535,14 +649,14 @@ svg.ico * {
 }
 
 /* ==========================================================================
-   Buttons, Inputs & Contextual Icon Cross-Fade
+   Buttons, Form Controls & Contextual Icon Cross-Fade
    ========================================================================== */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 9px 14px;
+  padding: 8px 14px;
   border-radius: 9px;
   font-family: var(--font-sans);
   font-size: 13px;
@@ -554,27 +668,27 @@ svg.ico * {
   color: var(--text-primary);
   background: var(--bg-raised);
   box-shadow: var(--shadow-btn-secondary);
+  white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
   transition-property: scale, background-color, box-shadow, color, border-color;
   transition-duration: 150ms;
   transition-timing-function: var(--ease-ui);
 }
 
-/* Optical alignment: 2px less padding on icon side */
 .btn-icon-start {
   padding-inline-start: 12px;
   padding-inline-end: 14px;
 }
 
 .btn-sm {
-  padding: 6px 11px;
-  font-size: 12.5px;
+  padding: 6px 10px;
+  font-size: 12px;
   border-radius: 7px;
 }
 
 .btn-sm.btn-icon-start {
-  padding-inline-start: 9px;
-  padding-inline-end: 11px;
+  padding-inline-start: 8px;
+  padding-inline-end: 10px;
 }
 
 .btn-primary {
@@ -618,7 +732,8 @@ svg.ico * {
 }
 
 .btn:focus-visible,
-.tab-btn:focus-visible,
+.seg-btn:focus-visible,
+.nav-link:focus-visible,
 .wheel-tile:focus-visible,
 .wheel-pill:focus-visible,
 .input:focus-visible,
@@ -627,7 +742,6 @@ svg.ico * {
   outline-offset: 2px;
 }
 
-/* Hover strictly behind @media (hover: hover) */
 @media (hover: hover) {
   .btn:not(:disabled):hover {
     background: #1f2636;
@@ -652,7 +766,6 @@ svg.ico * {
   }
 }
 
-/* Press scale = 0.96 gated behind prefers-reduced-motion: no-preference */
 @media (prefers-reduced-motion: no-preference) {
   .btn:not(:disabled):active,
   .wheel-tile:not(:disabled):active {
@@ -660,7 +773,7 @@ svg.ico * {
   }
 }
 
-/* Contextual icon cross-fade (exact better-ui recipe: 300ms cubic-bezier(0.2,0,0,1)) */
+/* Contextual icon cross-fade (300ms cubic-bezier(0.2, 0, 0, 1)) */
 .icon-swap {
   display: grid;
   place-items: center;
@@ -703,16 +816,16 @@ svg.ico * {
   }
 }
 
-/* Form controls keep visible >=3:1 border for accessibility */
 .input,
 .select {
   background: var(--bg-input);
   color: var(--text-primary);
   border: 1px solid var(--border-input);
   border-radius: 9px;
-  padding: 8px 10px;
+  padding: 7px 10px;
+  height: 36px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12.5px;
   min-width: 0;
   width: 100%;
   transition-property: border-color, background-color;
@@ -721,7 +834,6 @@ svg.ico * {
 }
 
 .select {
-  height: 36px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -729,7 +841,7 @@ svg.ico * {
 
 .select-sm {
   height: 30px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   font-size: 12px;
   border-radius: 7px;
 }
@@ -751,7 +863,7 @@ svg.ico * {
 .control-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
 }
 
 .control-head {
@@ -774,7 +886,7 @@ svg.ico * {
 
 .control-title h2 {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -817,7 +929,7 @@ svg.ico * {
   gap: 6px;
 }
 
-/* Outer r = 14px, pad = 6px, border = 1px -> inner sm controls r = 7px */
+/* Outer r = 14px, pad = 6px, border = 1px -> sm controls r = 7px */
 .port-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -875,80 +987,113 @@ svg.ico * {
 }
 
 /* ==========================================================================
-   Navigation Tablist (High-frequency interaction: <=120ms bg/color, no scale)
-   Outer r = 14px, pad = 4px, border = 1px -> .tab-btn r = 9px
+   SPA Section 1: Live Sensors (Left) + Oscilloscope & FFT (Right)
    ========================================================================== */
-.tablist-wrap {
-  display: flex;
+.live-workspace {
+  display: grid;
+  grid-template-columns: minmax(380px, 1.04fr) minmax(360px, 0.96fr);
+  gap: 12px;
+  align-items: start;
 }
 
-.tablist {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 14px;
-  background: var(--bg-surface);
-  border: 1px solid transparent;
-  box-shadow: var(--shadow-surface);
-  flex-wrap: wrap;
-}
-
-.tab-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 13px 8px 11px;
-  border-radius: 9px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition-property: background-color, color, border-color;
-  transition-duration: 120ms;
-  transition-timing-function: var(--ease-ui);
-}
-
-.tab-btn[aria-selected="true"] {
-  background: var(--bg-raised);
-  color: var(--text-primary);
-  border-color: oklch(0.75 0.14 230 / 0.35);
-}
-
-.tab-btn[aria-selected="true"] svg.ico {
-  color: var(--accent);
-}
-
-@media (hover: hover) {
-  .tab-btn[aria-selected="false"]:hover {
-    background: oklch(1 0 0 / 0.04);
-    color: var(--text-primary);
-  }
-}
-
-.tab-counter {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  background: var(--red-soft);
-  color: #fca5a5;
-  padding: 1px 6px;
-  border-radius: 6px;
-}
-
-/* ==========================================================================
-   Panel 1: 10-Wheel Rig Schematic (Tractor + ESP-NOW Bridge + Trailer)
-   ========================================================================== */
-.rig-layout {
+.rig-column {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+/* Dedicated S3 Master Card */
+.s3-module-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.s3-module-card[data-online="true"] {
+  box-shadow: 0 0 0 1px oklch(0.75 0.14 230 / 0.34), 0 10px 26px -10px oklch(0 0 0 / 0.5);
+}
+
+.s3-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.s3-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.s3-icon-box,
+.bridge-icon-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.s3-title-row,
+.bridge-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.s3-title-row h2,
+.bridge-title-row h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.s3-sub,
+.bridge-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.s3-quick-btns {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.s3-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.s3-stat {
+  background: var(--bg-well);
+  border-radius: 9px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-well);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.s3-stat strong {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Asset Group -> Axle Card -> Wheel Tile (3-level concentric radii: 24 -> 14 -> 7) */
 .asset-group {
   border-radius: 24px;
   padding: 9px;
@@ -961,7 +1106,7 @@ svg.ico * {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   padding: 4px 6px 8px;
   border-bottom: 1px solid var(--border-structural);
@@ -977,17 +1122,17 @@ svg.ico * {
 
 .asset-heading {
   margin: 2px 0 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .asset-bus-tag {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
   background: var(--bg-well);
@@ -998,18 +1143,16 @@ svg.ico * {
 }
 
 .asset-note {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-muted);
 }
 
 .axles-stack {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* Axle Card: r = 14px, pad = 6px, border = 1px -> .wheel-tile r = 7px
-   Nested inside .asset-group (pad = 9px, border = 1px) -> 14 + 9 + 1 = 24px */
 .axle-card {
   background: var(--bg-well);
   border: 1px solid transparent;
@@ -1018,7 +1161,7 @@ svg.ico * {
   box-shadow: var(--shadow-well);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 
 .axle-card[data-online="true"] {
@@ -1030,20 +1173,20 @@ svg.ico * {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 6px;
+  padding: 3px 6px;
   flex-wrap: wrap;
 }
 
 .axle-head-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex-wrap: wrap;
 }
 
 .axle-slot-badge {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--accent);
   background: var(--accent-soft);
@@ -1059,21 +1202,21 @@ svg.ico * {
 
 .axle-node-id {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 .axle-head-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .wheels-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
 }
 
 .wheel-tile {
@@ -1082,7 +1225,7 @@ svg.ico * {
   background: var(--bg-surface);
   border: 1px solid transparent;
   border-radius: 7px;
-  padding: 10px 11px;
+  padding: 10px;
   color: var(--text-primary);
   font-family: var(--font-sans);
   cursor: pointer;
@@ -1130,11 +1273,21 @@ svg.ico * {
   gap: 6px;
 }
 
+.wheel-title-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .wheel-code-tag {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+}
+
+.wheel-side-caption {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .wheel-primary-grid {
@@ -1145,7 +1298,7 @@ svg.ico * {
 
 .wheel-kpi {
   background: var(--bg-well);
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 6px 8px;
   border: 1px solid var(--border-structural);
 }
@@ -1161,7 +1314,7 @@ svg.ico * {
 .wheel-kpi-val {
   display: block;
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--text-primary);
   margin-top: 1px;
@@ -1178,7 +1331,7 @@ svg.ico * {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -1207,7 +1360,7 @@ svg.ico * {
   border-color: oklch(0.79 0.17 75 / 0.45);
 }
 
-/* Status Pills (static color + text, never motion alone) */
+/* Status Pills */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -1259,9 +1412,8 @@ svg.ico * {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 16px;
 }
 
 .bridge-connector[data-online="true"] {
@@ -1271,43 +1423,13 @@ svg.ico * {
 .bridge-left {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.bridge-icon-box {
-  width: 40px;
-  height: 40px;
-  border-radius: 9px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.bridge-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.bridge-title-row h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.bridge-sub {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--text-secondary);
+  gap: 10px;
 }
 
 .bridge-metrics {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -1315,42 +1437,43 @@ svg.ico * {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-inline-start: 12px;
+  padding-inline-start: 10px;
   border-inline-start: 1px solid var(--border-structural);
 }
 
 .bridge-stat strong {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-primary);
 }
 
 /* ==========================================================================
-   Panel 2: Oscilloscope & 32-Bin FFT Charts
+   Right Column: Live Oscilloscope & 32-Bin FFT
    ========================================================================== */
+.charts-column,
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .panel-header-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .panel-header-row h2 {
   margin: 0;
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .panel-sub {
-  margin: 3px 0 0;
-  font-size: 12.5px;
+  margin: 2px 0 0;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -1358,7 +1481,7 @@ svg.ico * {
 .burst-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -1373,7 +1496,7 @@ svg.ico * {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-radius: 9px;
   background: var(--bg-well);
   color: var(--text-secondary);
@@ -1415,66 +1538,69 @@ svg.ico * {
 
 .selected-metrics-strip {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  gap: 6px;
 }
 
 .metric-box {
   background: var(--bg-well);
   border-radius: 9px;
-  padding: 8px 10px;
+  padding: 7px 9px;
   border: 1px solid transparent;
   box-shadow: var(--shadow-well);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .metric-box strong {
   font-family: var(--font-mono);
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.charts-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+.charts-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .canvas-frame {
   background: var(--bg-well);
   border-radius: 9px;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid transparent;
   box-shadow: var(--shadow-well);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .canvas-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .canvas-head h3 {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .canvas-sub {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 canvas {
   width: 100%;
-  height: 255px;
+  height: 205px;
   display: block;
   border-radius: 6px;
   background: #07090e;
@@ -1482,16 +1608,16 @@ canvas {
 }
 
 /* ==========================================================================
-   Panel 3: Black Box ANOMALY_BURST & Incidents (Scroll Contained)
+   Section 2: Black Box & Incidents
    ========================================================================== */
 .blackbox-grid {
   display: grid;
-  grid-template-columns: 1.25fr 1fr;
+  grid-template-columns: 1.15fr 1fr;
   gap: 12px;
 }
 
 .incidents-scroll {
-  max-height: 520px;
+  max-height: 360px;
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
@@ -1506,7 +1632,7 @@ canvas {
   border: 1px solid var(--border-structural);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 
 .incident-top {
@@ -1540,7 +1666,7 @@ canvas {
 .empty-state {
   background: var(--bg-well);
   border-radius: 9px;
-  padding: 26px 18px;
+  padding: 22px 16px;
   border: 1px dashed var(--border-structural);
   text-align: center;
   color: var(--text-secondary);
@@ -1556,10 +1682,10 @@ canvas {
   color: #cbd5e1;
   border: 1px solid var(--border-structural);
   border-radius: 9px;
-  padding: 12px;
-  font-size: 12px;
-  line-height: 1.5;
-  max-height: 520px;
+  padding: 11px;
+  font-size: 11.5px;
+  line-height: 1.48;
+  max-height: 360px;
   overflow: auto;
   overscroll-behavior: contain;
   white-space: pre-wrap;
@@ -1567,7 +1693,7 @@ canvas {
 }
 
 /* ==========================================================================
-   Panel 4: S3 Thresholds, CLI Controls, Pinout & Console
+   Section 3: Thresholds, Console/CLI & Adaptive Pinout
    ========================================================================== */
 .config-grid {
   display: grid;
@@ -1575,10 +1701,14 @@ canvas {
   gap: 12px;
 }
 
+.span-full {
+  grid-column: 1 / -1;
+}
+
 .config-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .form-grid {
@@ -1591,16 +1721,22 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-secondary);
+}
+
+.pair-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
 }
 
 .field-checkbox {
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  grid-column: span 3;
-  padding-top: 4px;
+  grid-column: 1 / -1;
+  padding-top: 2px;
   color: var(--text-primary);
   cursor: pointer;
 }
@@ -1611,32 +1747,7 @@ canvas {
   accent-color: var(--accent);
 }
 
-.form-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.cli-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border-structural);
-}
-
-.cli-section:first-of-type {
-  border-top: none;
-  padding-top: 0;
-}
-
-.cli-group-label {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
+.form-actions,
 .cli-btn-row {
   display: flex;
   align-items: center;
@@ -1644,52 +1755,12 @@ canvas {
   flex-wrap: wrap;
 }
 
-.pinout-tables {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.pinout-block h3 {
-  margin: 0 0 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.pin-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.pin-table th,
-.pin-table td {
-  padding: 6px 8px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-structural);
-}
-
-.pin-table th {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-@media (hover: hover) {
-  .pin-table tbody tr:hover {
-    background: oklch(1 0 0 / 0.03);
-  }
-}
-
 .console-box {
   background: #07090e;
   border: 1px solid var(--border-structural);
   border-radius: 9px;
   padding: 10px 12px;
-  height: 310px;
+  height: 225px;
   overflow-y: auto;
   overscroll-behavior: contain;
   font-family: var(--font-mono);
@@ -1707,29 +1778,66 @@ canvas {
   word-break: break-word;
 }
 
-.console-ts {
-  color: var(--text-muted);
-  flex-shrink: 0;
+.console-ts { color: var(--text-muted); flex-shrink: 0; }
+.console-tag { color: var(--accent); font-weight: 600; flex-shrink: 0; }
+.console-text { color: #cbd5e1; }
+.console-form { margin-top: 0; }
+
+.pinout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 12px;
 }
 
-.console-tag {
-  color: var(--accent);
+.pinout-block {
+  background: var(--bg-well);
+  border-radius: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-structural);
+}
+
+.pinout-block h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
   font-weight: 600;
-  flex-shrink: 0;
+  color: var(--accent);
 }
 
-.console-text {
-  color: #cbd5e1;
+.pin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
 }
 
-.console-form {
-  margin-top: 0;
+.pin-table th,
+.pin-table td {
+  padding: 5px 7px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-structural);
+}
+
+.pin-table th {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+@media (hover: hover) {
+  .pin-table tbody tr:hover {
+    background: oklch(1 0 0 / 0.03);
+  }
 }
 
 /* ==========================================================================
    Responsive Breakpoints
    ========================================================================== */
-@media (max-width: 1220px) {
+@media (max-width: 1240px) {
+  .config-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .controls-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1738,43 +1846,35 @@ canvas {
     grid-template-columns: 1fr;
   }
 
-  .selected-metrics-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .charts-grid,
   .blackbox-grid,
   .config-grid {
     grid-template-columns: 1fr;
   }
 }
 
+@media (max-width: 1020px) {
+  .live-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .app-shell {
-    padding: 12px 12px 28px;
+    padding: 12px 12px 32px;
   }
 
-  .controls-grid {
+  .config-strip,
+  .controls-grid,
+  .wheels-pair,
+  .pinout-grid {
     grid-template-columns: 1fr;
   }
 
-  .axles-stack {
-    grid-template-columns: 1fr;
-  }
-
-  .wheels-pair {
-    grid-template-columns: 1fr;
-  }
-
-  .selected-metrics-strip {
+  .s3-metrics-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .field-checkbox {
-    grid-column: span 2;
   }
 }

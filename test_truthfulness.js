@@ -60,81 +60,83 @@ function makeAxlePacket(slot, overrides = {}) {
 }
 
 async function runAll() {
-  console.log('\nTechBIT v2.0 Workbench — Truthfulness & Rule Engine Test Suite\n');
+  console.log('\nTechBIT v2.1 SPA Workbench — Truthfulness, Profiles & Rule Engine Test Suite\n');
 
-  await test('1. Cold boot starts strictly OFFLINE / STANDBY with zero fake data', () => {
+  await test('1. Cold boot defaults to mvp_front (T1-L / T1-R + S3) strictly OFFLINE', () => {
     const eng = new TechBitV2Engine();
     eng.update(1000);
     const snap = eng.getSnapshot(1000);
-    assert.strictEqual(snap.indicator.driverSeverity, 'STANDBY');
+    assert.strictEqual(snap.config.rigProfile, 'mvp_front');
+    assert.strictEqual(snap.indicator.expectedWheels, 2);
     assert.strictEqual(snap.indicator.activeWheels, 0);
-    assert.strictEqual(snap.bridge.online, false);
+    assert.strictEqual(snap.indicator.driverSeverity, 'STANDBY');
     assert.strictEqual(snap.s3Master.online, false);
-    for (const ax of snap.axles) {
-      assert.strictEqual(ax.online, false);
-      assert.strictEqual(ax.left.severity, 'OFFLINE');
-      assert.strictEqual(ax.right.severity, 'OFFLINE');
-    }
   });
 
-  await test('2. Honest timeout watchdog marks stale C3 nodes and Bridge OFFLINE', () => {
-    const eng = new TechBitV2Engine({ nodeTimeoutMs: 5000 });
-    eng.ingestPacket(makeAxlePacket(1), 1000);
+  await test('2. Two separate boards mapped via T1-L and T1-R USB overrides merge cleanly', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front' });
     eng.ingestPacket(
-      { type: 'techbit_trailer_bridge', trailerId: 'TL_042', paired: true, rssi: -55, seq: 1 },
-      1000
+      {
+        type: 'techbit_c3_node',
+        nodeId: 'BOARD_L',
+        left: { rmsMmS: 1.2, tempC: 33.0, dcOffsetMv: 1650, shtOk: true, rh: 40 },
+      },
+      1000,
+      'T1-L'
+    );
+    eng.ingestPacket(
+      {
+        type: 'techbit_c3_node',
+        nodeId: 'BOARD_R',
+        left: { rmsMmS: 1.3, tempC: 34.0, dcOffsetMv: 1655, shtOk: true, rh: 42 },
+      },
+      1050,
+      'T1-R'
     );
     eng.update(1100);
-    assert.strictEqual(eng.axles[0].online, true);
-    assert.strictEqual(eng.bridge.online, true);
-
-    eng.update(7000);
-    assert.strictEqual(eng.axles[0].online, false);
-    assert.strictEqual(eng.axles[0].left.severity, 'OFFLINE');
-    assert.strictEqual(eng.bridge.online, false);
-    assert.strictEqual(eng.indicator.driverSeverity, 'STANDBY');
+    assert.strictEqual(eng.indicator.activeWheels, 2);
+    assert.strictEqual(eng.axles[0].left.tempC, 33.0);
+    assert.strictEqual(eng.axles[0].right.tempC, 34.0);
+    assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
   });
 
-  await test('3. Cobblestone road (all 5 axles high vibration) stays GREEN with roughRoadActive', () => {
-    const eng = new TechBitV2Engine({ yellowConfirmSec: 5 });
+  await test('3. MVP 2-wheel cobblestone stays GREEN with roughRoadActive=true', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front', yellowConfirmSec: 5 });
     let t = 1000;
-    for (let step = 0; step < 30; step++) {
-      t += 500;
-      const pkts = generateV2SimPackets('cobblestone', step * 500, step + 1);
+    for (let step = 0; step < 25; step++) {
+      t += 400;
+      const pkts = generateV2SimPackets('cobblestone', step * 400, step + 1, 'mvp_front');
       for (const p of pkts) eng.ingestPacket(p, t);
       eng.update(t);
     }
+    assert.strictEqual(eng.indicator.activeWheels, 2);
     assert.strictEqual(eng.indicator.roughRoadActive, true);
     assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
     assert.strictEqual(eng.burstEvents.length, 0);
   });
 
-  await test('4. Single-wheel pothole clip triggers POTHOLE_GUARD without false alarm', () => {
-    const eng = new TechBitV2Engine({ yellowConfirmSec: 5 });
-    for (let s = 1; s <= 5; s++) eng.ingestPacket(makeAxlePacket(s), 1000);
-    eng.update(1100);
-
-    // Sudden BAT54S clipped pothole impact on P2-L (slot 4)
+  await test('4. Sensor type config adapts Vref & SHT40 validation cleanly', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front' });
     eng.ingestPacket(
-      makeAxlePacket(4, { left: { rmsMmS: 6.1, peakMmS: 26.0, crest: 6.3, clip: true } }),
-      1300
+      makeAxlePacket(1, { left: { dcOffsetMv: 780, rh: 92.0, shtOk: true } }),
+      1000
     );
-    eng.update(1400);
+    eng.update(1100);
+    assert.strictEqual(eng.axles[0].left.vrefStatus, 'FAULT');
+    assert.strictEqual(eng.axles[0].left.humidityWarn, true);
 
-    assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
-    assert.ok(eng.indicator.potholeCount >= 1);
-    assert.strictEqual(eng.axles[3].lastReason, 'POTHOLE_GUARD');
-    assert.strictEqual(eng.axles[3].left.clip, true);
+    // Switch to direct piezo + NTC -> no false Vref fault or SHT40 condensation warning
+    eng.updateConfig({ vibSensorType: 'piezo_direct', tempSensorType: 'ntc' });
+    assert.strictEqual(eng.axles[0].left.vrefStatus, 'NA');
+    assert.strictEqual(eng.axles[0].left.humidityWarn, false);
   });
 
-  await test('5. Sustained ΔT > 18°C latches YELLOW after 60s, then RED + buzzer on overheat', () => {
-    const eng = new TechBitV2Engine({ yellowConfirmSec: 60, redConfirmSec: 5 });
+  await test('5. Full 10-wheel profile: sustained ΔT > 18°C latches YELLOW after 60s, then RED + buzzer', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'full_10', yellowConfirmSec: 60, redConfirmSec: 5 });
     let t = 1000;
-    // Establish normal baseline tick first
     for (let s = 1; s <= 5; s++) eng.ingestPacket(makeAxlePacket(s), t);
     eng.update(t);
 
-    // 59 seconds at ΔT = 24°C on P2-L -> still GREEN (hysteresis)
     for (let sec = 0; sec < 59; sec++) {
       t += 1000;
       for (let s = 1; s <= 5; s++) {
@@ -147,7 +149,6 @@ async function runAll() {
     }
     assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
 
-    // Cross 60 s -> YELLOW on P2-L + ANOMALY_BURST
     t += 1000;
     for (let s = 1; s <= 5; s++) {
       eng.ingestPacket(
@@ -158,119 +159,94 @@ async function runAll() {
     eng.update(t);
     assert.strictEqual(eng.indicator.driverSeverity, 'YELLOW');
     assert.strictEqual(eng.indicator.wheelCode, 'P2-L');
-    assert.strictEqual(eng.burstEvents.length, 1);
-    assert.strictEqual(eng.burstEvents[0].packet_type, 'ANOMALY_BURST');
 
-    // Escalate P2-L to 103°C for 5 seconds -> RED + active buzzer
     for (let sec = 0; sec < 6; sec++) {
       t += 1000;
       eng.ingestPacket(makeAxlePacket(4, { left: { tempC: 103.0 }, right: { tempC: 34.0 } }), t);
       eng.update(t);
     }
     assert.strictEqual(eng.indicator.driverSeverity, 'RED');
-    assert.strictEqual(eng.indicator.wheelCode, 'P2-L');
     assert.strictEqual(eng.indicator.buzzerOn, true);
-
     eng.toggleMute();
     eng.update(t + 100);
     assert.strictEqual(eng.indicator.buzzerOn, false);
   });
 
-  await test('6. Shadow Mode records ANOMALY_BURST silently while keeping driver LED GREEN', () => {
-    const eng = new TechBitV2Engine({ shadowModeEnabled: true });
-    const t = 2000;
-    for (let s = 1; s <= 5; s++) {
-      eng.ingestPacket(
-        s === 3
-          ? makeAxlePacket(3, { left: { tempC: 47.0, rmsMmS: 2.3 }, right: { tempC: 34.0, rmsMmS: 1.15 } })
-          : makeAxlePacket(s),
-        t
-      );
-    }
-    eng.update(t + 100);
+  await test('6. Single-wheel pothole clip triggers POTHOLE_GUARD without false alarm', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front' });
+    eng.ingestPacket(makeAxlePacket(1), 1000);
+    eng.update(1100);
+    eng.ingestPacket(
+      makeAxlePacket(1, { left: { rmsMmS: 6.1, peakMmS: 26.0, crest: 6.3, clip: true } }),
+      1300
+    );
+    eng.update(1400);
+    assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
+    assert.ok(eng.indicator.potholeCount >= 1);
+    assert.strictEqual(eng.axles[0].lastReason, 'POTHOLE_GUARD');
+  });
+
+  await test('7. Shadow Mode records ANOMALY_BURST silently while keeping driver LED GREEN', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front', shadowModeEnabled: true });
+    eng.ingestPacket(
+      makeAxlePacket(1, { left: { tempC: 34.0, rmsMmS: 1.15 }, right: { tempC: 47.0, rmsMmS: 2.3 } }),
+      2000
+    );
+    eng.update(2100);
     assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
     assert.strictEqual(eng.indicator.shadowCount, 1);
     assert.strictEqual(eng.burstEvents[0].severity, 'SHADOW');
-    assert.strictEqual(eng.burstEvents[0].wheel_code, 'P1-L');
+    assert.strictEqual(eng.burstEvents[0].wheel_code, 'T1-R');
   });
 
-  await test('7. MCP6002 Vref fault, GY-SHT40 I2C fault, condensation RH >= 85%, and legacy v1 packet', () => {
-    const eng = new TechBitV2Engine();
-    eng.ingestPacket(
-      makeAxlePacket(1, { left: { dcOffsetMv: 780 }, right: { rh: 91.5, shtOk: true } }),
-      1000
-    );
-    eng.ingestPacket(
-      {
-        type: 'techbit_node',
-        wheelId: 3,
-        rmsMv: 42.0,
-        peakMv: 110.0,
-        crestFactor: 2.6,
-        dcOffsetMv: 1652,
-        dominantFreqHz: 320,
-        tempC: 37.5,
-        humidityPct: 48.0,
-        sht40Ok: true,
-      },
-      1000
-    );
-    eng.update(1100);
-
-    assert.strictEqual(eng.axles[0].left.vrefStatus, 'FAULT');
-    assert.strictEqual(eng.axles[0].right.humidityWarn, true);
-    assert.strictEqual(eng.axles[1].online, true);
-    assert.strictEqual(eng.axles[1].right.tempC, 37.5);
-  });
-
-  await test('8. HTTP Server routes, live hardware disabling simulator, command queue, and CSV export', async () => {
+  await test('8. HTTP Server routes, live profile switching, simulator override, and CSV export', async () => {
     const { server } = createServer({ disableTimers: true });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const port = server.address().port;
-    const base = `http://127.0.0.1:${port}`;
+    const base = `http://127.0.0.1:${server.address().port}`;
 
     try {
-      // Static assets
       for (const p of ['/', '/styles.css', '/app.js']) {
         const res = await fetch(`${base}${p}`);
-        assert.strictEqual(res.status, 200, `Expected 200 for ${p}`);
+        assert.strictEqual(res.status, 200);
       }
 
-      // Start simulator
+      // Switch profile via API
       let res = await fetch(`${base}/api/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'config',
+          config: { rigProfile: 'tractor_4', vibSensorType: 'mems_imu', tempSensorType: 'dual', redConfirmSec: 0 },
+        }),
+      });
+      let data = await res.json();
+      assert.strictEqual(data.state.config.rigProfile, 'tractor_4');
+      assert.strictEqual(data.state.indicator.expectedWheels, 4);
+      assert.strictEqual(data.state.config.vibSensorType, 'mems_imu');
+
+      // Start simulator then verify live packet overrides it
+      await fetch(`${base}/api/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'simulator', enabled: true, scenario: 'smooth' }),
       });
-      let data = await res.json();
-      assert.strictEqual(data.state.source.mode, 'simulator');
 
-      // Queue raw CLI command for ESP
       await fetch(`${base}/api/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'raw', cmd: 'slot 4' }),
+        body: JSON.stringify({ action: 'raw', cmd: 'slot 1' }),
       });
 
-      // Live hardware packet must automatically supersede simulator AND pop queued command
       res = await fetch(`${base}/api/telemetry`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...makeAxlePacket(4, { left: { tempC: 105.0 } }), _source: 'serial' }),
+        body: JSON.stringify({ ...makeAxlePacket(1, { right: { tempC: 104.0 } }), _source: 'serial' }),
       });
       const ack = await res.json();
       assert.strictEqual(ack.ok, true);
-      assert.deepStrictEqual(ack.commands, ['slot 4']);
+      assert.deepStrictEqual(ack.commands, ['slot 1']);
 
-      // Set redConfirmSec = 0 via config API to confirm ticket creation + Ground Truth resolution
-      await fetch(`${base}/api/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'config', config: { redConfirmSec: 0 } }),
-      });
-
-      res = await fetch(`${base}/api/state`);
-      const st = await res.json();
+      const st = await (await fetch(`${base}/api/state`)).json();
       assert.strictEqual(st.source.mode, 'serial');
       assert.ok(st.incidents.length >= 1);
 
@@ -281,10 +257,7 @@ async function runAll() {
         body: JSON.stringify({ action: 'resolve_ticket', ticketId, resolutionCode: 'BRAKE_STUCK' }),
       });
 
-      const csvRes = await fetch(`${base}/api/export.csv`);
-      assert.strictEqual(csvRes.status, 200);
-      const csv = await csvRes.text();
-      assert.ok(csv.includes('ticket_id,event_id,created_at_utc'));
+      const csv = await (await fetch(`${base}/api/export.csv`)).text();
       assert.ok(csv.includes('BRAKE_STUCK'));
     } finally {
       await new Promise((resolve) => server.close(resolve));

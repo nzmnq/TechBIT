@@ -1,14 +1,45 @@
 'use strict';
 
 // ============================================================================
-// TechBIT v2.0 Diagnostics & Rule Engine (JavaScript Parity with C++ RuleEngine)
-// Models:
-//   - Tractor (2 unified C3 Axle Nodes -> 4 wheels: T1-L/R, T2-L/R)
-//   - Trailer Bridge (C3 ESP-NOW LR AES-128 wireless gateway)
-//   - Trailer (3 unified C3 Axle Nodes -> 6 wheels: P1-L/R, P2-L/R, P3-L/R)
-//   - Cabin S3 Master (Mini LED indicator: GREEN / YELLOW / RED + Wheel Code,
-//                      Shadow Mode, Black Box ANOMALY_BURST, BLE 15m, LTE)
+// TechBIT v2.1 Diagnostics & Rule Engine (JavaScript Parity with C++ RuleEngine)
+// Supports configurable bench profiles & sensor types:
+//   - rigProfile:
+//       'mvp_front'  -> Front Left (T1-L) + Front Right (T1-R) + S3 Master (Default MVP)
+//       'tractor_4'  -> Tractor 2 axles (T1, T2 = 4 wheels) + S3 Master
+//       'full_10'    -> Full coupling (Tractor T1..T2 + C3 Bridge + Trailer P1..P3 = 10 wheels)
+//   - tempSensorType: 'sht40' | 'ntc' | 'dual'
+//   - vibSensorType:  'piezo_mcp6002' | 'piezo_direct' | 'mems_imu'
 // ============================================================================
+
+const RIG_PROFILES = {
+  mvp_front: {
+    id: 'mvp_front',
+    label: 'MVP Стенд: Перед (T1-L / T1-R) + S3 Master',
+    shortLabel: 'MVP 2 колеса + S3',
+    slots: [1],
+    hasBridge: false,
+    expectedWheels: 2,
+  },
+  tractor_4: {
+    id: 'tractor_4',
+    label: 'Тягач: 2 осі (4 колеса) + S3 Master',
+    shortLabel: 'Тягач 4 колеса',
+    slots: [1, 2],
+    hasBridge: false,
+    expectedWheels: 4,
+  },
+  full_10: {
+    id: 'full_10',
+    label: 'Повна зчіпка: 10 коліс + ESP-NOW Місток + S3',
+    shortLabel: 'Зчіпка 10 коліс',
+    slots: [1, 2, 3, 4, 5],
+    hasBridge: true,
+    expectedWheels: 10,
+  },
+};
+
+const TEMP_SENSOR_TYPES = ['sht40', 'ntc', 'dual'];
+const VIB_SENSOR_TYPES = ['piezo_mcp6002', 'piezo_direct', 'mems_imu'];
 
 const AXLE_SLOTS = [
   { slot: 1, key: 'T1', asset: 'tractor', axleNum: 1, label: 'Тягач • Передня вісь', codeL: 'T1-L', codeR: 'T1-R' },
@@ -19,6 +50,9 @@ const AXLE_SLOTS = [
 ];
 
 const DEFAULT_CONFIG = {
+  rigProfile: 'mvp_front',
+  tempSensorType: 'sht40',
+  vibSensorType: 'piezo_mcp6002',
   tempWarnC: 70.0,
   tempCritC: 95.0,
   axleTempDeltaWarnC: 18.0,
@@ -41,12 +75,14 @@ function createEmptySide(code, side) {
   return {
     code,
     side,
+    online: false,
+    lastRxMs: 0,
     rmsMv: 0,
     rmsMmS: 0,
     peakMmS: 0,
     crest: 1.0,
     dcOffsetMv: null,
-    vrefStatus: 'UNKNOWN', // 'OK' | 'FAULT' | 'UNKNOWN'
+    vrefStatus: 'UNKNOWN', // 'OK' | 'FAULT' | 'NA' | 'UNKNOWN'
     fDomHz: 0,
     clip: false,
     tempC: null,
@@ -87,17 +123,32 @@ function createEmptyAxle(def) {
 
 function makeUuid(ts, nodeStr, seq) {
   const h1 = (ts >>> 0).toString(16).padStart(8, '0');
-  const h2 = ((seq * 2654435761) >>> 16 & 0xffff).toString(16).padStart(4, '0');
+  const h2 = (((seq * 2654435761) >>> 16) & 0xffff).toString(16).padStart(4, '0');
   const h3 = (0x4000 | (seq & 0x0fff)).toString(16).padStart(4, '0');
   const h4 = (0x8000 | ((ts ^ seq) & 0x3fff)).toString(16).padStart(4, '0');
-  const tag = String(nodeStr || 'C3000000').replace(/[^A-Fa-f0-9]/g, '').padEnd(12, '0').slice(0, 12).toLowerCase();
+  const tag = String(nodeStr || 'C3000000')
+    .replace(/[^A-Fa-f0-9]/g, '')
+    .padEnd(12, '0')
+    .slice(0, 12)
+    .toLowerCase();
   return `${h1}-${h2}-${h3}-${h4}-${tag}`;
 }
 
 class TechBitV2Engine {
   constructor(initialConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...initialConfig };
+    if (!RIG_PROFILES[this.config.rigProfile]) {
+      this.config.rigProfile = 'mvp_front';
+    }
     this.reset();
+  }
+
+  getProfileMeta() {
+    return RIG_PROFILES[this.config.rigProfile] || RIG_PROFILES.mvp_front;
+  }
+
+  isSlotInProfile(slot) {
+    return this.getProfileMeta().slots.includes(slot);
   }
 
   reset() {
@@ -105,7 +156,7 @@ class TechBitV2Engine {
     this.eventSeq = 0;
     this.tractorId = 'TR_001';
     this.trailerId = 'TL_042';
-    this.deviceId = 'S3_WORKBENCH';
+    this.deviceId = 'S3_MASTER_MVP';
 
     this.axles = AXLE_SLOTS.map((d) => createEmptyAxle(d));
     this.nodeIdToSlot = new Map();
@@ -126,7 +177,7 @@ class TechBitV2Engine {
       online: false,
       seenEver: false,
       lastRxMs: 0,
-      deviceId: 'S3_WORKBENCH',
+      deviceId: 'S3_MASTER_MVP',
       bleActive: false,
       lteOnline: false,
       pendingQueue: 0,
@@ -143,6 +194,7 @@ class TechBitV2Engine {
       potholeCount: 0,
       activeAxles: 0,
       activeWheels: 0,
+      expectedWheels: this.getProfileMeta().expectedWheels,
       offlineAxles: 0,
     };
 
@@ -152,6 +204,7 @@ class TechBitV2Engine {
   }
 
   updateConfig(patch) {
+    if (!patch || typeof patch !== 'object') return this.config;
     const numKeys = [
       'tempWarnC',
       'tempCritC',
@@ -169,18 +222,36 @@ class TechBitV2Engine {
       'humidityWarnPct',
     ];
     let changed = false;
+
+    if (patch.rigProfile && RIG_PROFILES[patch.rigProfile] && patch.rigProfile !== this.config.rigProfile) {
+      this.config.rigProfile = patch.rigProfile;
+      changed = true;
+    }
+    if (patch.tempSensorType && TEMP_SENSOR_TYPES.includes(patch.tempSensorType)) {
+      if (patch.tempSensorType !== this.config.tempSensorType) changed = true;
+      this.config.tempSensorType = patch.tempSensorType;
+    }
+    if (patch.vibSensorType && VIB_SENSOR_TYPES.includes(patch.vibSensorType)) {
+      if (patch.vibSensorType !== this.config.vibSensorType) changed = true;
+      this.config.vibSensorType = patch.vibSensorType;
+    }
+
     for (const k of numKeys) {
       if (patch[k] !== undefined && Number.isFinite(Number(patch[k]))) {
+        if (this.config[k] !== Number(patch[k])) changed = true;
         this.config[k] = Number(patch[k]);
-        changed = true;
       }
     }
     if (typeof patch.shadowModeEnabled === 'boolean') {
+      if (this.config.shadowModeEnabled !== patch.shadowModeEnabled) changed = true;
       this.config.shadowModeEnabled = patch.shadowModeEnabled;
-      changed = true;
     }
     if (changed) {
       this.config.configVersion += 1;
+      for (const ax of this.axles) {
+        this.evaluateSideHardware(ax.left);
+        this.evaluateSideHardware(ax.right);
+      }
     }
     return this.config;
   }
@@ -192,6 +263,25 @@ class TechBitV2Engine {
     return true;
   }
 
+  parseSlotOverride(slotOverride) {
+    if (!slotOverride || slotOverride === 'auto' || slotOverride === 's3') {
+      return { slot: null, sideOnly: null };
+    }
+    const str = String(slotOverride).trim().toUpperCase();
+    // Single-wheel override for bench testing 2 separate boards on T1-L and T1-R!
+    const wheelMatch = str.match(/^([TP])([1-3])-([LR])$/);
+    if (wheelMatch) {
+      const slotMap = { T1: 1, T2: 2, P1: 3, P2: 4, P3: 5 };
+      const slot = slotMap[`${wheelMatch[1]}${wheelMatch[2]}`] || 1;
+      return { slot, sideOnly: wheelMatch[3] };
+    }
+    const num = Number(slotOverride);
+    if (num >= 1 && num <= 5) {
+      return { slot: num, sideOnly: null };
+    }
+    return { slot: null, sideOnly: null };
+  }
+
   resolveSlot(nodeId, requestedSlot, fromTrailer = false) {
     const req = Number(requestedSlot);
     if (req >= 1 && req <= 5) {
@@ -201,8 +291,12 @@ class TechBitV2Engine {
     if (nodeId && this.nodeIdToSlot.has(String(nodeId))) {
       return this.nodeIdToSlot.get(String(nodeId));
     }
-    // Auto-assign first free slot in tractor (1..2) or trailer (3..5)
-    const range = fromTrailer ? [3, 4, 5] : [1, 2, 3, 4, 5];
+    const profileSlots = this.getProfileMeta().slots;
+    const range = fromTrailer
+      ? [3, 4, 5]
+      : profileSlots.length > 0
+        ? profileSlots
+        : [1, 2, 3, 4, 5];
     for (const s of range) {
       const ax = this.axles[s - 1];
       if (!ax.nodeId || ax.nodeId === nodeId) {
@@ -210,11 +304,14 @@ class TechBitV2Engine {
         return s;
       }
     }
-    return fromTrailer ? 3 : 1;
+    return range[0] || 1;
   }
 
   evaluateSideHardware(sideObj) {
-    if (sideObj.dcOffsetMv !== null && Number.isFinite(sideObj.dcOffsetMv)) {
+    // Vref validation applies specifically when using MCP6002 analog front-end
+    if (this.config.vibSensorType !== 'piezo_mcp6002') {
+      sideObj.vrefStatus = 'NA';
+    } else if (sideObj.dcOffsetMv !== null && Number.isFinite(sideObj.dcOffsetMv)) {
       sideObj.vrefStatus =
         sideObj.dcOffsetMv >= this.config.vrefMinMv && sideObj.dcOffsetMv <= this.config.vrefMaxMv
           ? 'OK'
@@ -222,19 +319,45 @@ class TechBitV2Engine {
     } else {
       sideObj.vrefStatus = 'UNKNOWN';
     }
-    sideObj.humidityWarn =
-      sideObj.shtOk && sideObj.rh !== null && sideObj.rh >= this.config.humidityWarnPct;
+
+    // Condensation check applies when SHT40 humidity sensor is active
+    if (this.config.tempSensorType === 'ntc') {
+      sideObj.humidityWarn = false;
+    } else {
+      sideObj.humidityWarn =
+        sideObj.shtOk && sideObj.rh !== null && sideObj.rh >= this.config.humidityWarnPct;
+    }
+  }
+
+  applySidePayload(targetSide, src, nowMs) {
+    targetSide.online = true;
+    targetSide.lastRxMs = nowMs;
+    targetSide.rmsMv = Number(src.rmsMv ?? 0);
+    targetSide.rmsMmS = Number(src.rmsMmS ?? targetSide.rmsMv * 0.045);
+    targetSide.peakMmS = Number(src.peakMmS ?? targetSide.rmsMmS * 2.6);
+    targetSide.crest = Number(src.crest ?? 2.6);
+    targetSide.dcOffsetMv = src.dcOffsetMv !== undefined ? Number(src.dcOffsetMv) : null;
+    targetSide.fDomHz = Number(src.fDomHz ?? 0);
+    targetSide.clip = Boolean(src.clip);
+    targetSide.tempC = src.tempC !== undefined ? Number(src.tempC) : null;
+    targetSide.rh = src.rh !== undefined ? Number(src.rh) : null;
+    targetSide.shtOk = Boolean(src.shtOk);
+    if (Array.isArray(src.spectrum) && src.spectrum.length === 32) {
+      targetSide.spectrum = src.spectrum.map((v) => Number(v) || 0);
+    }
+    this.evaluateSideHardware(targetSide);
   }
 
   ingestPacket(pkt, nowMs = Date.now(), slotOverride = null) {
     if (!pkt || typeof pkt !== 'object') return false;
+    const override = this.parseSlotOverride(slotOverride);
 
-    // 1. Unified v2 C3 Axle Node (L+R wheels + SHT40 + 32-bin FFT)
+    // 1. Unified v2 C3 Axle Node (L+R wheels, or single-wheel USB override T1-L / T1-R)
     if (pkt.type === 'techbit_c3_node') {
-      const fromTrailer = Boolean(pkt.fromTrailer) || (Number(pkt.slot) >= 3);
+      const fromTrailer = Boolean(pkt.fromTrailer) || Number(pkt.slot) >= 3;
       const slot = this.resolveSlot(
         pkt.nodeId,
-        slotOverride && slotOverride !== 'auto' ? Number(slotOverride) : pkt.slot,
+        override.slot !== null ? override.slot : pkt.slot,
         fromTrailer
       );
       const ax = this.axles[slot - 1];
@@ -244,38 +367,15 @@ class TechBitV2Engine {
       ax.lastRxMs = nowMs;
       ax.rxCount += 1;
 
-      if (pkt.left) {
-        ax.left.rmsMv = Number(pkt.left.rmsMv ?? 0);
-        ax.left.rmsMmS = Number(pkt.left.rmsMmS ?? ax.left.rmsMv * 0.045);
-        ax.left.peakMmS = Number(pkt.left.peakMmS ?? ax.left.rmsMmS * 2.6);
-        ax.left.crest = Number(pkt.left.crest ?? 2.6);
-        ax.left.dcOffsetMv = pkt.left.dcOffsetMv !== undefined ? Number(pkt.left.dcOffsetMv) : null;
-        ax.left.fDomHz = Number(pkt.left.fDomHz ?? 0);
-        ax.left.clip = Boolean(pkt.left.clip);
-        ax.left.tempC = pkt.left.tempC !== undefined ? Number(pkt.left.tempC) : null;
-        ax.left.rh = pkt.left.rh !== undefined ? Number(pkt.left.rh) : null;
-        ax.left.shtOk = Boolean(pkt.left.shtOk);
-        if (Array.isArray(pkt.left.spectrum) && pkt.left.spectrum.length === 32) {
-          ax.left.spectrum = pkt.left.spectrum.map((v) => Number(v) || 0);
-        }
-        this.evaluateSideHardware(ax.left);
-      }
-
-      if (pkt.right) {
-        ax.right.rmsMv = Number(pkt.right.rmsMv ?? 0);
-        ax.right.rmsMmS = Number(pkt.right.rmsMmS ?? ax.right.rmsMv * 0.045);
-        ax.right.peakMmS = Number(pkt.right.peakMmS ?? ax.right.rmsMmS * 2.6);
-        ax.right.crest = Number(pkt.right.crest ?? 2.6);
-        ax.right.dcOffsetMv = pkt.right.dcOffsetMv !== undefined ? Number(pkt.right.dcOffsetMv) : null;
-        ax.right.fDomHz = Number(pkt.right.fDomHz ?? 0);
-        ax.right.clip = Boolean(pkt.right.clip);
-        ax.right.tempC = pkt.right.tempC !== undefined ? Number(pkt.right.tempC) : null;
-        ax.right.rh = pkt.right.rh !== undefined ? Number(pkt.right.rh) : null;
-        ax.right.shtOk = Boolean(pkt.right.shtOk);
-        if (Array.isArray(pkt.right.spectrum) && pkt.right.spectrum.length === 32) {
-          ax.right.spectrum = pkt.right.spectrum.map((v) => Number(v) || 0);
-        }
-        this.evaluateSideHardware(ax.right);
+      if (override.sideOnly === 'L') {
+        const src = pkt.left || pkt.right;
+        if (src) this.applySidePayload(ax.left, src, nowMs);
+      } else if (override.sideOnly === 'R') {
+        const src = pkt.right || pkt.left;
+        if (src) this.applySidePayload(ax.right, src, nowMs);
+      } else {
+        if (pkt.left) this.applySidePayload(ax.left, pkt.left, nowMs);
+        if (pkt.right) this.applySidePayload(ax.right, pkt.right, nowMs);
       }
 
       if (pkt.i2c) ax.i2c = { ...ax.i2c, ...pkt.i2c };
@@ -302,7 +402,7 @@ class TechBitV2Engine {
       return true;
     }
 
-    // 3. Cabin S3 Master snapshot (aggregates tractor + trailer nodes)
+    // 3. Cabin S3 Master snapshot
     if (pkt.type === 'techbit_s3_master') {
       this.s3Master.seenEver = true;
       this.s3Master.online = true;
@@ -352,10 +452,8 @@ class TechBitV2Engine {
     // 4. Backward compatibility: legacy v1 single-wheel packet (`type: 'techbit_node'`)
     if (pkt.type === 'techbit_node') {
       const wId = Number(pkt.wheelId ?? 0);
-      const slot = slotOverride && slotOverride !== 'auto'
-        ? Number(slotOverride)
-        : (wId <= 1 ? 1 : 2);
-      const isRight = (wId === 1 || wId === 3);
+      const slot = override.slot !== null ? override.slot : wId <= 1 ? 1 : 2;
+      const isRight = override.sideOnly ? override.sideOnly === 'R' : wId === 1 || wId === 3;
       const sideData = {
         rmsMv: Number(pkt.rmsMv ?? 0),
         rmsMmS: Number(((pkt.rmsMv ?? 0) * 0.045).toFixed(2)),
@@ -376,7 +474,8 @@ class TechBitV2Engine {
           slot,
           [isRight ? 'right' : 'left']: sideData,
         },
-        nowMs
+        nowMs,
+        override.sideOnly ? `${slot === 1 ? 'T1' : 'T2'}-${override.sideOnly}` : null
       );
     }
 
@@ -403,7 +502,7 @@ class TechBitV2Engine {
     const eventId = makeUuid(Math.floor(nowMs / 1000), ax.nodeId, this.eventSeq);
     const tsUtc = new Date(nowMs).toISOString();
     const summary = this.axles
-      .filter((a) => a.online)
+      .filter((a) => a.online && this.isSlotInProfile(a.slot))
       .map((a) => ({
         node_id: a.nodeId,
         slot: a.key,
@@ -420,14 +519,19 @@ class TechBitV2Engine {
       device_id: this.deviceId,
       timestamp_utc: tsUtc,
       tractor_id: this.tractorId,
-      trailer_id: this.trailerId,
+      trailer_id: this.getProfileMeta().hasBridge ? this.trailerId : null,
+      rig_profile: this.config.rigProfile,
+      sensors: {
+        vibration: this.config.vibSensorType,
+        temperature: this.config.tempSensorType,
+      },
       packet_type: 'ANOMALY_BURST',
       event_id: eventId,
       severity,
       trigger_node_id: ax.nodeId,
       wheel_code: wheelCode,
       trigger_reason: reason,
-      firmware_version: '2.0.0-mvp',
+      firmware_version: '2.1.0-mvp',
       config_version: this.config.configVersion,
       summary,
       burst_samples_base64: burstB64,
@@ -490,25 +594,40 @@ class TechBitV2Engine {
         : Math.min(1000, nowMs - this.lastUpdateMs);
     this.lastUpdateMs = nowMs;
 
-    // 1. Honest timeout watchdog for all axles, bridge, and S3 Master
+    const profile = this.getProfileMeta();
+
+    // 1. Honest timeout watchdog for axles, individual wheels, bridge, and S3 Master
     let activeAxles = 0;
+    let activeWheels = 0;
     let offlineAxles = 0;
     let vibSum = 0;
 
     for (const ax of this.axles) {
-      if (ax.seenEver) {
-        ax.online = nowMs - ax.lastRxMs <= this.config.nodeTimeoutMs;
-      } else {
-        ax.online = false;
-      }
+      const inProfile = profile.slots.includes(ax.slot);
+      const timeout = this.config.nodeTimeoutMs;
+
+      ax.left.online = ax.left.lastRxMs > 0 && nowMs - ax.left.lastRxMs <= timeout;
+      ax.right.online = ax.right.lastRxMs > 0 && nowMs - ax.right.lastRxMs <= timeout;
+      ax.online = ax.seenEver && nowMs - ax.lastRxMs <= timeout && (ax.left.online || ax.right.online);
+
+      if (!ax.left.online) ax.left.severity = 'OFFLINE';
+      if (!ax.right.online) ax.right.severity = 'OFFLINE';
+
+      if (!inProfile) continue;
 
       if (ax.online) {
         activeAxles += 1;
-        vibSum += 0.5 * (ax.left.rmsMmS + ax.right.rmsMmS);
-      } else {
-        ax.left.severity = 'OFFLINE';
-        ax.right.severity = 'OFFLINE';
-        if (ax.seenEver) offlineAxles += 1;
+        if (ax.left.online) activeWheels += 1;
+        if (ax.right.online) activeWheels += 1;
+        const meanV =
+          ax.left.online && ax.right.online
+            ? 0.5 * (ax.left.rmsMmS + ax.right.rmsMmS)
+            : ax.left.online
+              ? ax.left.rmsMmS
+              : ax.right.rmsMmS;
+        vibSum += meanV;
+      } else if (ax.seenEver) {
+        offlineAxles += 1;
       }
     }
 
@@ -521,41 +640,67 @@ class TechBitV2Engine {
 
     const fleetMeanVib = activeAxles > 0 ? Math.max(0.8, vibSum / activeAxles) : 1.0;
 
+    // Rough cobblestone detection:
+    // - Multi-axle profiles: >= 2 axles share elevated vibration simultaneously
+    // - Single-axle MVP bench (T1-L + T1-R): both left & right wheels share elevated symmetric vibration
     let roughCount = 0;
     for (const ax of this.axles) {
-      if (!ax.online) continue;
-      if (0.5 * (ax.left.rmsMmS + ax.right.rmsMmS) >= this.config.vibWarnRmsMmS) {
-        roughCount += 1;
+      if (!ax.online || !profile.slots.includes(ax.slot)) continue;
+      if (ax.left.online && ax.right.online) {
+        const minV = Math.max(0.6, Math.min(ax.left.rmsMmS, ax.right.rmsMmS));
+        const maxV = Math.max(ax.left.rmsMmS, ax.right.rmsMmS);
+        if (0.5 * (ax.left.rmsMmS + ax.right.rmsMmS) >= this.config.vibWarnRmsMmS) {
+          roughCount += 1;
+        }
+        if (
+          activeAxles === 1 &&
+          ax.left.rmsMmS >= this.config.vibWarnRmsMmS &&
+          ax.right.rmsMmS >= this.config.vibWarnRmsMmS &&
+          maxV / minV < 1.35
+        ) {
+          roughCount = 2; // Both front wheels riding cobblestone symmetrically
+        }
       }
     }
-    const roughRoadAllWheels = activeAxles >= 2 && roughCount >= 2;
+    const roughRoadAllWheels = roughCount >= 2;
 
-    // 2. Evaluate rules per active axle (exact parity with C++ RuleEngine.cpp)
+    // 2. Evaluate rules per active axle inside the selected rig profile
     let highestSev = activeAxles > 0 ? 'GREEN' : 'STANDBY';
     let highestCode = activeAxles > 0 ? 'OK' : '—';
     const yellowConfirmMs = this.config.yellowConfirmSec * 1000;
     const redConfirmMs = this.config.redConfirmSec * 1000;
 
     for (const ax of this.axles) {
-      if (!ax.online) continue;
+      if (!ax.online || !profile.slots.includes(ax.slot)) continue;
 
-      const tL = ax.left.tempC ?? 25.0;
-      const tR = ax.right.tempC ?? 25.0;
+      const bothOnline = ax.left.online && ax.right.online;
+      const tL = ax.left.online ? (ax.left.tempC ?? 25.0) : (ax.right.tempC ?? 25.0);
+      const tR = ax.right.online ? (ax.right.tempC ?? 25.0) : (ax.left.tempC ?? 25.0);
       const maxTemp = Math.max(tL, tR);
-      const tempDelta = Math.abs(tL - tR);
+      const tempDelta = bothOnline ? Math.abs(tL - tR) : 0;
       ax.tempDeltaC = tempDelta;
 
-      const rightIsHot =
-        tempDelta >= 3.0
-          ? tR > tL
-          : (ax.right.clip && !ax.left.clip) ||
-            (!ax.left.clip && ax.right.rmsMmS > ax.left.rmsMmS);
+      let rightIsHot = false;
+      if (!ax.left.online && ax.right.online) {
+        rightIsHot = true;
+      } else if (ax.left.online && !ax.right.online) {
+        rightIsHot = false;
+      } else {
+        rightIsHot =
+          tempDelta >= 3.0
+            ? tR > tL
+            : (ax.right.clip && !ax.left.clip) ||
+              (!ax.left.clip && ax.right.rmsMmS > ax.left.rmsMmS);
+      }
+
       ax.hotSide = rightIsHot ? 'R' : 'L';
       const hotObj = rightIsHot ? ax.right : ax.left;
       const coldObj = rightIsHot ? ax.left : ax.right;
 
-      const minSideVib = Math.max(0.6, Math.min(ax.left.rmsMmS, ax.right.rmsMmS));
-      const maxSideVib = Math.max(ax.left.rmsMmS, ax.right.rmsMmS);
+      const minSideVib = bothOnline
+        ? Math.max(0.6, Math.min(ax.left.rmsMmS, ax.right.rmsMmS))
+        : 1.0;
+      const maxSideVib = hotObj.rmsMmS;
       const sideRatio = maxSideVib / minSideVib;
       const peerRatio = maxSideVib / fleetMeanVib;
 
@@ -567,7 +712,7 @@ class TechBitV2Engine {
         (!transientPothole &&
           !roughRoadAllWheels &&
           maxSideVib >= this.config.vibCritRmsMmS &&
-          peerRatio >= this.config.vibDeltaRatioWarn);
+          (bothOnline ? sideRatio >= this.config.vibDeltaRatioWarn : peerRatio >= 1.0));
 
       const yellowCond =
         redCond ||
@@ -575,16 +720,18 @@ class TechBitV2Engine {
         tempDelta >= this.config.axleTempDeltaWarnC ||
         (!transientPothole &&
           !roughRoadAllWheels &&
-          sideRatio >= this.config.vibDeltaRatioWarn &&
-          maxSideVib >= this.config.vibWarnRmsMmS);
+          maxSideVib >= this.config.vibWarnRmsMmS &&
+          (bothOnline ? sideRatio >= this.config.vibDeltaRatioWarn : true));
 
       const shadowCond =
         this.config.shadowModeEnabled &&
         !yellowCond &&
         !transientPothole &&
         !roughRoadAllWheels &&
-        (sideRatio >= this.config.shadowVibRatio ||
-          tempDelta >= this.config.axleTempDeltaWarnC * 0.65);
+        (bothOnline
+          ? sideRatio >= this.config.shadowVibRatio ||
+            tempDelta >= this.config.axleTempDeltaWarnC * 0.65
+          : maxSideVib >= this.config.vibWarnRmsMmS * 0.72);
 
       if (redCond) {
         ax.redAccumMs = Math.min(ax.redAccumMs + dtMs, redConfirmMs + 3000);
@@ -635,7 +782,7 @@ class TechBitV2Engine {
         ax.shadowTriggered = false;
       }
 
-      coldObj.severity = 'GREEN';
+      if (coldObj.online) coldObj.severity = 'GREEN';
       if (ax.redLatched) {
         hotObj.severity = 'RED';
         highestSev = 'RED';
@@ -653,12 +800,13 @@ class TechBitV2Engine {
       }
     }
 
-    this.indicator.driverSeverity = highestSev; // Never exposes SHADOW to driver LED
+    this.indicator.driverSeverity = highestSev;
     this.indicator.wheelCode = highestCode;
     this.indicator.buzzerOn = highestSev === 'RED' && !this.s3Master.buzzerMuted;
     this.indicator.roughRoadActive = roughRoadAllWheels;
     this.indicator.activeAxles = activeAxles;
-    this.indicator.activeWheels = activeAxles * 2;
+    this.indicator.activeWheels = activeWheels;
+    this.indicator.expectedWheels = profile.expectedWheels;
     this.indicator.offlineAxles = offlineAxles;
   }
 
@@ -678,6 +826,7 @@ class TechBitV2Engine {
       tractorId: this.tractorId,
       trailerId: this.trailerId,
       deviceId: this.deviceId,
+      profile: this.getProfileMeta(),
       config: { ...this.config },
       indicator: { ...this.indicator },
       bridge: { ...this.bridge },
@@ -693,6 +842,9 @@ class TechBitV2Engine {
 }
 
 module.exports = {
+  RIG_PROFILES,
+  TEMP_SENSOR_TYPES,
+  VIB_SENSOR_TYPES,
   AXLE_SLOTS,
   DEFAULT_CONFIG,
   TechBitV2Engine,

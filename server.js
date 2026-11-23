@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { TechBitV2Engine } = require('./v2_engine');
+const { RIG_PROFILES, TechBitV2Engine } = require('./v2_engine');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME_TYPES = {
@@ -19,12 +19,25 @@ const SIM_SCENARIOS = [
   'smooth',
   'cobblestone',
   'pothole_clip',
+  'brake_drag',
+  'bearing_wear',
+  'shadow_early',
+  'link_loss',
+  'sensor_fault',
+  // Legacy aliases kept for backwards compatibility
   'brake_drag_p2l',
   'bearing_t2r',
-  'shadow_early',
   'bridge_loss',
   'sht40_vref_fault',
 ];
+
+function normalizeScenario(s) {
+  if (s === 'brake_drag_p2l') return 'brake_drag';
+  if (s === 'bearing_t2r') return 'bearing_wear';
+  if (s === 'bridge_loss') return 'link_loss';
+  if (s === 'sht40_vref_fault') return 'sensor_fault';
+  return SIM_SCENARIOS.includes(s) ? s : 'smooth';
+}
 
 function isPrivateLanIpv4(ip) {
   if (/^192\.168\./.test(ip) || /^10\./.test(ip)) return true;
@@ -57,13 +70,18 @@ function buildSimSpectrum(rmsMv, domFreqHz, isRough, phase) {
   return bins;
 }
 
-function generateV2SimPackets(scenario, elapsedMs, tickIdx) {
+function generateV2SimPackets(rawScenario, elapsedMs, tickIdx, rigProfile = 'mvp_front', config = {}) {
+  const scenario = normalizeScenario(rawScenario);
+  const profile = RIG_PROFILES[rigProfile] || RIG_PROFILES.mvp_front;
+  const slots = profile.slots;
+  const isMvpFront = profile.id === 'mvp_front';
+  const isFull10 = profile.id === 'full_10';
   const phase = tickIdx * 0.32;
   const packets = [];
-  const nodeIds = ['C3_110011', 'C3_110012', 'C3_998876', 'C3_998877', 'C3_998878'];
+  const nodeIds = ['C3_T1_FRONT', 'C3_T2_REAR', 'C3_P1_TRL', 'C3_P2_TRL', 'C3_P3_TRL'];
 
-  // Trailer Bridge status (dropped during bridge_loss)
-  if (scenario !== 'bridge_loss') {
+  // Trailer Bridge packet only when profile includes Trailer
+  if (profile.hasBridge && scenario !== 'link_loss') {
     packets.push({
       type: 'techbit_trailer_bridge',
       mcu: 'SIM_ESP32-C3',
@@ -76,21 +94,34 @@ function generateV2SimPackets(scenario, elapsedMs, tickIdx) {
     });
   }
 
-  // S3 Master telemetry meta
+  // S3 Master telemetry meta (present in ALL profiles including MVP!)
   packets.push({
     type: 'techbit_s3_master',
     mcu: 'SIM_ESP32-S3',
-    deviceId: 'S3_A1B2C3',
+    deviceId: isMvpFront ? 'S3_MASTER_MVP' : 'S3_A1B2C3',
     tractorId: 'TR_001',
-    trailerId: 'TL_042',
+    trailerId: profile.hasBridge ? 'TL_042' : '—',
     bleActive: false,
     lteOnline: true,
     pendingQueue: 0,
   });
 
-  // Generate 5 unified C3 Axle Nodes (Tractor T1..T2, Trailer P1..P3 = 10 wheels)
-  for (let slot = 1; slot <= 5; slot++) {
-    if (scenario === 'bridge_loss' && slot >= 3) continue; // Trailer ESP-NOW lost
+  // Target slots adapt cleanly to the active rig profile
+  const brakeSlot = isFull10 ? 4 : 1; // P2-L in 10-wheel, T1-R in MVP / Tractor
+  const brakeRight = !isFull10;
+  const bearingSlot = isMvpFront ? 1 : 2; // T1-L in MVP, T2-R in 4/10
+  const bearingRight = !isMvpFront;
+  const potholeSlot = isFull10 ? 4 : 1; // P2-L or T1-L
+  const shadowSlot = isFull10 ? 3 : 1; // P1-L or T1-R
+  const shadowRight = !isFull10;
+  const shtFaultSlot = isFull10 ? 4 : 1;
+
+  for (const slot of slots) {
+    // Link loss drops trailer in full_10, or front CAN node in MVP/tractor
+    if (scenario === 'link_loss') {
+      if (isFull10 && slot >= 3) continue;
+      if (!isFull10 && slot === 1 && elapsedMs > 1200) continue;
+    }
 
     const jL = 0.95 + 0.07 * Math.sin(phase + slot * 1.1);
     const jR = 0.95 + 0.07 * Math.cos(phase + slot * 1.4);
@@ -105,8 +136,8 @@ function generateV2SimPackets(scenario, elapsedMs, tickIdx) {
     let tR = 33.5 + slot * 0.5;
     let rhL = 42.0 + slot;
     let rhR = 42.5 + slot;
-    let shtOkL = true;
-    let shtOkR = true;
+    let shtOkL = config.tempSensorType !== 'ntc';
+    let shtOkR = config.tempSensorType !== 'ntc';
     let vrefL = 1650 + Math.sin(phase + slot) * 7;
     let vrefR = 1648 + Math.cos(phase + slot) * 7;
     let fL = 240 + slot * 10;
@@ -127,42 +158,59 @@ function generateV2SimPackets(scenario, elapsedMs, tickIdx) {
       fR = 290;
     } else if (scenario === 'pothole_clip') {
       const cyc = elapsedMs % 5000;
-      if (slot === 4 && cyc >= 700 && cyc < 1100) {
+      if (slot === potholeSlot && cyc >= 700 && cyc < 1100) {
         vL = 5.9;
         pL = 24.5;
         cL = 6.2;
         clipL = true;
         fL = 410;
       }
-    } else if (scenario === 'brake_drag_p2l') {
-      if (slot === 4) {
-        // Trailer Axle 2 Left (P2-L) sticking brake caliper
+    } else if (scenario === 'brake_drag') {
+      if (slot === brakeSlot) {
         const ramp = Math.min(1.0, elapsedMs / 9000);
-        tL = 58.0 + ramp * 44.0; // Ramps from 58°C (YELLOW ΔT) to 102°C (RED!)
-        vL = (3.9 + ramp * 2.6) * jL;
-        pL = vL * 2.9;
-        fL = 3420;
+        if (brakeRight) {
+          tR = 58.0 + ramp * 44.0;
+          vR = (3.9 + ramp * 2.6) * jR;
+          pR = vR * 2.9;
+          fR = 3420;
+        } else {
+          tL = 58.0 + ramp * 44.0;
+          vL = (3.9 + ramp * 2.6) * jL;
+          pL = vL * 2.9;
+          fL = 3420;
+        }
       }
-    } else if (scenario === 'bearing_t2r') {
-      if (slot === 2) {
-        // Tractor Rear Axle Right (T2-R) hub bearing wear
-        tR = 62.5;
-        vR = 4.65 * jR;
-        pR = vR * 2.85;
-        fR = 1480;
+    } else if (scenario === 'bearing_wear') {
+      if (slot === bearingSlot) {
+        if (bearingRight) {
+          tR = 62.5;
+          vR = 4.65 * jR;
+          pR = vR * 2.85;
+          fR = 1480;
+        } else {
+          tL = 62.5;
+          vL = 4.65 * jL;
+          pL = vL * 2.85;
+          fL = 1480;
+        }
       }
     } else if (scenario === 'shadow_early') {
-      if (slot === 3) {
-        // Subtle drift below YELLOW threshold -> silently captured in SHADOW mode!
-        tL = 46.5;
-        vL = 2.25 * jL;
-        fL = 960;
+      if (slot === shadowSlot) {
+        if (shadowRight) {
+          tR = 46.5;
+          vR = 2.25 * jR;
+          fR = 960;
+        } else {
+          tL = 46.5;
+          vL = 2.25 * jL;
+          fL = 960;
+        }
       }
-    } else if (scenario === 'sht40_vref_fault') {
+    } else if (scenario === 'sensor_fault') {
       if (slot === 1) {
-        vrefL = 780.0; // Broken Vref divider on MCP6002
+        vrefL = 780.0; // Broken Vref divider on MCP6002 (T1-L)
       }
-      if (slot === 4) {
+      if (slot === shtFaultSlot) {
         shtOkL = false;
         rhR = 92.4; // Condensation inside enclosure
       }
@@ -187,7 +235,7 @@ function generateV2SimPackets(scenario, elapsedMs, tickIdx) {
         fDomHz: Math.round(fL),
         clip: clipL,
         tempC: Number(tL.toFixed(1)),
-        rh: Number(rhL.toFixed(1)),
+        rh: config.tempSensorType === 'ntc' ? null : Number(rhL.toFixed(1)),
         shtOk: shtOkL,
         spectrum: buildSimSpectrum(mvL, fL, rough, phase + slot),
       },
@@ -200,11 +248,16 @@ function generateV2SimPackets(scenario, elapsedMs, tickIdx) {
         fDomHz: Math.round(fR),
         clip: clipR,
         tempC: Number(tR.toFixed(1)),
-        rh: Number(rhR.toFixed(1)),
+        rh: config.tempSensorType === 'ntc' ? null : Number(rhR.toFixed(1)),
         shtOk: shtOkR,
         spectrum: buildSimSpectrum(mvR, fR, rough, phase + slot + 2),
       },
-      i2c: { sda: 8, scl: 9, addr: shtOkL ? '0x44' : 'ERR', err: shtOkL ? 0 : 2 },
+      i2c: {
+        sda: 8,
+        scl: 9,
+        addr: config.tempSensorType === 'ntc' ? 'NTC' : shtOkL ? '0x44' : 'ERR',
+        err: config.tempSensorType === 'ntc' ? 0 : shtOkL ? 0 : 2,
+      },
       can: { ready: true, tx: tickIdx * 2, err: 0 },
     });
   }
@@ -230,7 +283,7 @@ function readJsonBody(req, maxBytes = 65536) {
       if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
-      } catch (err) {
+      } catch (_) {
         reject(new Error('Invalid JSON'));
       }
     });
@@ -297,7 +350,6 @@ function createServer(options = {}) {
 
   function ingestTelemetryObject(obj, sourceKind, senderLabel = null, slotOverride = null) {
     const now = Date.now();
-    // Live hardware automatically supersedes simulator (Truthfulness guarantee)
     if (sourceKind !== 'simulator' && sourceMeta.mode === 'simulator') {
       sourceMeta.mode = sourceKind;
       sourceMeta.simStartedAt = null;
@@ -336,7 +388,7 @@ function createServer(options = {}) {
     for (const client of sseClients) {
       try {
         client.write(msg);
-      } catch (err) {
+      } catch (_) {
         sseClients.delete(client);
       }
     }
@@ -357,7 +409,6 @@ function createServer(options = {}) {
       return;
     }
 
-    // SSE real-time stream
     if (req.method === 'GET' && pathname === '/api/events') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -384,7 +435,6 @@ function createServer(options = {}) {
       return;
     }
 
-    // Telemetry ingest (Wi-Fi push from ESP32 or Web Serial relay from Browser)
     if (req.method === 'POST' && pathname === '/api/telemetry') {
       try {
         const body = await readJsonBody(req);
@@ -402,7 +452,6 @@ function createServer(options = {}) {
       }
     }
 
-    // Workbench commands (reset, mute, simulator, ip_poll, config, resolve_ticket, raw)
     if (req.method === 'POST' && pathname === '/api/command') {
       try {
         const body = await readJsonBody(req);
@@ -421,22 +470,33 @@ function createServer(options = {}) {
           const muted = engine.toggleMute();
           addLog('CMD', `Зумер кабіни: ${muted ? 'ВИМКНЕНО (MUTE)' : 'УВІМКНЕНО'}`);
         } else if (action === 'config' && body.config) {
+          const prevProfile = engine.config.rigProfile;
           engine.updateConfig(body.config);
-          addLog('CFG', `Оновлено пороги v${engine.config.configVersion}`);
+          if (body.config.rigProfile && body.config.rigProfile !== prevProfile) {
+            engine.resetAlerts();
+            addLog('PROFILE', `Конфігурація стенду: ${engine.getProfileMeta().shortLabel}`);
+          } else {
+            addLog(
+              'CFG',
+              `Оновлено конфігурацію v${engine.config.configVersion} (${engine.config.vibSensorType} / ${engine.config.tempSensorType})`
+            );
+          }
         } else if (action === 'resolve_ticket') {
           const tkt = engine.resolveIncident(body.ticketId, body.resolutionCode);
           if (tkt) addLog('TICKET', `${tkt.ticket_id} закрито -> ${tkt.resolution_code}`);
         } else if (action === 'simulator') {
           if (body.enabled) {
             sourceMeta.mode = 'simulator';
-            sourceMeta.simScenario = SIM_SCENARIOS.includes(body.scenario) ? body.scenario : 'smooth';
+            sourceMeta.simScenario = normalizeScenario(body.scenario);
             sourceMeta.simStartedAt = Date.now();
             sourceMeta.simTick = 0;
-            // Fast 6-second YELLOW confirm during bench simulator unless explicitly overridden
             if (engine.config.yellowConfirmSec === 60) {
               engine.updateConfig({ yellowConfirmSec: 6 });
             }
-            addLog('SIM', `Симулятор запущено: ${sourceMeta.simScenario} (YELLOW гістерезис 6 с для тесту)`);
+            addLog(
+              'SIM',
+              `Симулятор [${engine.getProfileMeta().shortLabel}]: ${sourceMeta.simScenario}`
+            );
           } else {
             sourceMeta.mode = 'waiting';
             sourceMeta.simStartedAt = null;
@@ -467,7 +527,6 @@ function createServer(options = {}) {
       }
     }
 
-    // Static files from public/
     const relPath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
     const safePath = path.normalize(path.join(PUBLIC_DIR, relPath));
     if (safePath.startsWith(PUBLIC_DIR) && fs.existsSync(safePath) && fs.statSync(safePath).isFile()) {
@@ -481,7 +540,6 @@ function createServer(options = {}) {
     res.end('Not found');
   });
 
-  // Periodic background timers
   let ppsTimer = null;
   let tickTimer = null;
   let pollInFlight = false;
@@ -499,7 +557,13 @@ function createServer(options = {}) {
       if (sourceMeta.mode === 'simulator') {
         const elapsed = now - (sourceMeta.simStartedAt || now);
         sourceMeta.simTick += 1;
-        const simPkts = generateV2SimPackets(sourceMeta.simScenario, elapsed, sourceMeta.simTick);
+        const simPkts = generateV2SimPackets(
+          sourceMeta.simScenario,
+          elapsed,
+          sourceMeta.simTick,
+          engine.config.rigProfile,
+          engine.config
+        );
         for (const p of simPkts) {
           ingestTelemetryObject(p, 'simulator', 'SIMULATOR');
         }
@@ -542,7 +606,7 @@ if (require.main === module) {
   const PORT = Number(process.env.PORT) || 5050;
   const { server } = createServer();
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n[TechBIT v2 Test Workbench] http://localhost:${PORT}`);
+    console.log(`\n[TechBIT v2.1 SPA Workbench] http://localhost:${PORT}`);
     const urls = getLanUrls(PORT);
     if (urls.length > 0) {
       console.log(`[TechBIT Wi-Fi Telemetry Endpoint] ${urls.join(' | ')}`);
