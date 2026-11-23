@@ -1,37 +1,33 @@
-# TechBIT — Веб-сайт та каталог систем контролю стану коліс
+# TechBIT — B2B IoT + SaaS платформа та каталог (MVP)
 
-Комерційний веб-додаток **TechBIT** (Frontend: React + HTML/CSS/JS, Backend: Node.js + Express API) для підбору та замовлення систем контролю гальмівних колодок і ходової частини транспорту.
+Веб-додаток і хмарний бекенд **TechBIT** (Frontend: React + Vite + i18n `uk.json`/`en.json`, Backend: Node.js + Express) для B2B-продажів комплектів моніторингу фур/причепів та консолі інцидентів (Software Spec v2.0).
 
-## Функціонал
+## Основний функціонал
 
-- **Головна сторінка**: бізнес-переваги системи, сегменти застосування (фури, причепи, буси, легкові авто 4WD/AWD, СТО), таблиця розпізнавання дорожніх умов та швидкий запит на підбір обладнання.
-- **Каталог із фільтрами**:
-  - Категорії: **Комплекти на 4 датчики (всі колеса)**, **Комплекти на 2 датчики (1 вісь)**, **Датчики та комплектуючі**.
-  - Фільтри за типом транспорту, ціною, наявністю, текстовий пошук та сортування.
-  - Модальне вікно з детальною комплектацією (`Детальніше`) та робочий кошик з оформленням замовлення.
-- **Про нас**: опис задач клієнтів, гарантійні умови (`IP67`, гарантія 12 місяців), контакти команди та переходи в соцмережі (`Instagram`, `Telegram`, `Email`).
-- **Node.js API (`server/index.js`)**:
-  - `GET /api/categories` — категорії каталогу
-  - `GET /api/products` — фільтрація, пошук та сортування товарів
-  - `GET /api/about` — дані про компанію та команду
-  - `POST /api/orders` — оформлення замовлень із перевіркою цін на сервері
-  - `POST /api/consultations` — заявки на консультацію та підбір комплекту
+- **Головна (`HomePage`)**: B2B цінність (запобігання поломкам ступиць, гальм і пожежам коліс), модель доступу (міні LED водію без BLE / сервісний BLE інсталятору / Cloud SaaS), інтерактивний **калькулятор вартості заліза, підписки SaaS та економії (Стандарт vs Design Partners)**, багаторівнева таблиця реакції (`GREEN`, `SHADOW`, `YELLOW`, `RED`).
+- **Каталог (`CatalogPage`)**: готові комплекти (`TB-FULL-10`, `TB-TRACTOR-4`, `TB-TRAILER-6`, `TB-PARTNER-PILOT`) та змінні модулі (`C3 Node`, `C3 Trailer Bridge`, `S3 Master LTE`, монтаж `Deutsch DT`), ціни в грн і `$` + щомісячна SaaS-підписка, робочий кошик із вибором плану (`Стандарт B2B` / `Design Partner 0 грн за 6 міс.`).
+- **Web-адмінка моніторингу (`AdminPage`)**:
+  - Роздільна модель парку (`Tractor` / `Trailer` / `SensorNode`, Drop & Hook);
+  - Конвертація часу з `UTC` у локальний час, одиниці СІ (`°C`, `mm/s`);
+  - Симулятор `S3 -> Cloud ANOMALY_BURST` (`POST /api/ingest`) із прев’ю Telegram-алерта;
+  - Закриття інцидентів механіком у 2 кліки (Ground Truth) та експорт ML-датасету (`CSV` / `JSON`);
+  - Віддалений конфігуратор JSON-порогів для `ESP32-S3` (з перемикачем `Shadow Mode`).
+
+## API Ендпоїнти (`server/index.js`)
+
+- `GET /api/categories`, `GET /api/products`, `GET /api/about`
+- `POST /api/orders`, `POST /api/consultations`
+- `GET /api/fleet`, `POST /api/ingest`
+- `GET /api/incidents`, `PATCH /api/incidents/:ticketId`
+- `GET /api/dataset/export?format=csv`
+- `PUT /api/devices/:deviceId/config`
 
 ## Локальний запуск
 
-1. Встановити залежності (один раз):
-   ```bash
-   npm run install:all
-   ```
+```bash
+npm run install:all   # 1 раз (якщо ще не встановлено)
+npm run build         # збірка клієнта в client/dist
+npm run server        # Node.js API + роздача клієнта на http://localhost:5000
+```
 
-2. Запустити Node.js API (порт `5000`):
-   ```bash
-   npm run server
-   ```
-
-3. Запустити React dev-сервер (порт `5173`):
-   ```bash
-   npm run client
-   ```
-
-Або відкрити зібрану версію безпосередньо на `http://localhost:5000` після запуску `npm run server`.
+*(Попередня версія v1 збережена локально в гілці `legacy-v1-archive` → папка `legacy_v1_code/`.)*

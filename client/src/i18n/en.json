@@ -1,0 +1,29 @@
+{
+  "nav": {
+    "brandTag": "B2B IoT + SaaS • Truck & Trailer Wheel Health",
+    "home": "Overview & ROI",
+    "catalog": "Packages & Pricing",
+    "admin": "Fleet Console (MVP)",
+    "about": "Architecture & Team",
+    "cart": "Order"
+  },
+  "units": {
+    "temp": "°C",
+    "vib": "mm/s",
+    "currencyUah": "UAH"
+  },
+  "alert": {
+    "GREEN": "Normal",
+    "YELLOW": "Warning (Yellow)",
+    "RED": "Critical (Red)",
+    "SHADOW": "Shadow Log"
+  },
+  "resolutions": {
+    "BEARING_FAULT": "Bearing / Hub Defect",
+    "BRAKE_STUCK": "Sticking Brake / Caliper",
+    "TIRE_ISSUE": "Tire Issue",
+    "SENSOR_FAULT": "Sensor / Harness Fault",
+    "FALSE_POSITIVE": "No Defect Found (False Positive)",
+    "OTHER": "Other"
+  }
+}

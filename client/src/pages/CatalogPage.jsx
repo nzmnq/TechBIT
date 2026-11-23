@@ -8,11 +8,10 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
   const [apiError, setApiError] = useState('');
   const [activeProduct, setActiveProduct] = useState(null);
 
-  // Стани фільтрів
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [vehicleType, setVehicleType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [maxPrice, setMaxPrice] = useState(6000);
+  const [maxPrice, setMaxPrice] = useState(35000);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState('default');
 
@@ -20,7 +19,6 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
     setSelectedCategory(initialCategory);
   }, [initialCategory]);
 
-  // Завантаження категорій з API
   useEffect(() => {
     async function fetchCategories() {
       try {
@@ -30,18 +28,16 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
           setCategories(data);
         }
       } catch (err) {
-        // Fallback категорії залишаться доступними
+        // Fallback rendered below
       }
     }
     fetchCategories();
   }, []);
 
-  // Завантаження відфільтрованих товарів з API
   useEffect(() => {
     async function fetchProducts() {
       setLoading(true);
       setApiError('');
-
       try {
         const params = new URLSearchParams();
         if (selectedCategory !== 'all') params.append('category', selectedCategory);
@@ -52,20 +48,15 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
         if (sortBy !== 'default') params.append('sort', sortBy);
 
         const res = await fetch(`/api/products?${params.toString()}`);
-        if (!res.ok) {
-          throw new Error('Помилка відповіді сервера');
-        }
+        if (!res.ok) throw new Error('Server error');
         const data = await res.json();
         setProducts(data.items || []);
       } catch (err) {
-        setApiError(
-          'Не вдалося завантажити каталог із сервера. Переконайтеся, що Node.js сервер запущено.'
-        );
+        setApiError('Не вдалося завантажити каталог із Node.js API.');
       } finally {
         setLoading(false);
       }
     }
-
     fetchProducts();
   }, [selectedCategory, vehicleType, searchQuery, maxPrice, inStockOnly, sortBy]);
 
@@ -73,7 +64,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
     setSelectedCategory('all');
     setVehicleType('all');
     setSearchQuery('');
-    setMaxPrice(6000);
+    setMaxPrice(35000);
     setInStockOnly(false);
     setSortBy('default');
   }
@@ -82,15 +73,14 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
     <div>
       <div className="section-box" style={{ marginBottom: '20px', padding: '18px 24px' }}>
         <h1 className="page-title" style={{ marginBottom: '4px' }}>
-          Каталог систем та датчиків TechBIT
+          B2B Каталог обладнання та тарифів TechBIT
         </h1>
         <p className="page-subtitle" style={{ marginBottom: 0 }}>
-          Оберіть готовий комплект на 4 колеса, на одну вісь (2 датчики) або додаткові комплектуючі для вашого транспорту.
+          Уніфіковані комплекти для тягачів (4 колеса), напівпричепів (6 коліс), повних зчіпок (10 коліс) і змінні модулі на герметичних роз’ємах.
         </p>
       </div>
 
       <div className="catalog-layout">
-        {/* Панель фільтрів */}
         <aside className="filter-panel">
           <div className="filter-group">
             <span className="filter-title">Категорії</span>
@@ -98,10 +88,9 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
               {(categories.length > 0
                 ? categories
                 : [
-                    { id: 'all', name: 'Усі позиції', count: 9 },
-                    { id: 'kit-4', name: 'Комплекти на 4 датчики (всі колеса)', count: 3 },
-                    { id: 'kit-2', name: 'Комплекти на 2 датчики (1 вісь)', count: 3 },
-                    { id: 'accessories', name: 'Датчики та комплектуючі', count: 3 }
+                    { id: 'all', name: 'Усі позиції', count: 8 },
+                    { id: 'kit-coupling', name: 'Комплекти (Тягач / Причеп / Зчіпка)', count: 4 },
+                    { id: 'modules', name: 'Модулі, джгути та сервісний монтаж', count: 4 }
                   ]
               ).map((cat) => (
                 <button
@@ -119,13 +108,13 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
 
           <div className="filter-group">
             <label className="filter-title" htmlFor="filter-search">
-              Пошук за назвою або артикулом
+              Пошук за назвою або SKU
             </label>
             <input
               id="filter-search"
               type="text"
               className="filter-input"
-              placeholder="Наприклад: фура, причіп, 2x, 4x..."
+              placeholder="Напр.: причеп, S3, C3, пілот..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -133,7 +122,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
 
           <div className="filter-group">
             <label className="filter-title" htmlFor="filter-vehicle">
-              Тип транспорту
+              Призначення транспорту
             </label>
             <select
               id="filter-vehicle"
@@ -141,38 +130,31 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
               value={vehicleType}
               onChange={(e) => setVehicleType(e.target.value)}
             >
-              <option value="all">Усі типи транспорту</option>
-              <option value="truck">Фура / Причіп / Лафет</option>
-              <option value="car">Легкове авто / 4WD (12V)</option>
-              <option value="van">Комерційний бус / СТО</option>
+              <option value="all">Усі типи</option>
+              <option value="coupling">Повна зчіпка (10 коліс)</option>
+              <option value="tractor">Тягач (4 колеса / 2 осі)</option>
+              <option value="trailer">Напівпричеп (6 коліс / 3 осі)</option>
+              <option value="universal">Універсальні модулі та СТО</option>
             </select>
           </div>
 
           <div className="filter-group">
             <label className="filter-title" htmlFor="filter-price">
-              Ціна до: <strong>{maxPrice} грн</strong>
+              Бюджет заліза до: <strong>{maxPrice.toLocaleString('uk-UA')} грн</strong>
             </label>
             <input
               id="filter-price"
               type="range"
-              min="500"
-              max="6000"
-              step="100"
+              min="1500"
+              max="35000"
+              step="500"
               style={{ width: '100%' }}
               value={maxPrice}
               onChange={(e) => setMaxPrice(Number(e.target.value))}
             />
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '12px',
-                color: '#52606d',
-                marginTop: '4px'
-              }}
-            >
-              <span>500 грн</span>
-              <span>6 000 грн</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#526273' }}>
+              <span>1 500 грн</span>
+              <span>35 000 грн</span>
             </div>
           </div>
 
@@ -183,29 +165,23 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                 checked={inStockOnly}
                 onChange={(e) => setInStockOnly(e.target.checked)}
               />
-              <span>Тільки в наявності</span>
+              <span>Тільки в наявності на складі</span>
             </label>
           </div>
 
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ width: '100%' }}
-            onClick={handleResetFilters}
-          >
+          <button type="button" className="btn btn-secondary btn-sm" style={{ width: '100%' }} onClick={handleResetFilters}>
             Скинути фільтри
           </button>
         </aside>
 
-        {/* Список товарів */}
         <div>
           <div className="catalog-toolbar">
             <div>
-              Знайдено товарів: <strong>{products.length}</strong>
+              Знайдено позицій: <strong>{products.length}</strong>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label htmlFor="sort-select" style={{ fontSize: '13.5px', color: '#52606d' }}>
+              <label htmlFor="sort-select" style={{ fontSize: '13px', color: '#526273' }}>
                 Сортування:
               </label>
               <select
@@ -218,13 +194,13 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                 <option value="default">За замовчуванням</option>
                 <option value="price-asc">Спочатку дешевші</option>
                 <option value="price-desc">Спочатку дорожчі</option>
-                <option value="sensors-desc">За кількістю датчиків</option>
+                <option value="wheels-desc">За кількістю коліс</option>
               </select>
             </div>
           </div>
 
           {apiError && (
-            <div className="section-box" style={{ borderColor: '#b43c2f', color: '#b43c2f' }}>
+            <div className="section-box" style={{ borderColor: '#b91c1c', color: '#b91c1c' }}>
               {apiError}
             </div>
           )}
@@ -232,16 +208,14 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
           {loading ? (
             <div className="section-box">Завантаження каталогу...</div>
           ) : products.length === 0 ? (
-            <div className="section-box">
-              За заданими фільтрами нічого не знайдено. Спробуйте змінити категорію або скинути фільтри.
-            </div>
+            <div className="section-box">Нічого не знайдено. Спробуйте змінити фільтри.</div>
           ) : (
             <div className="products-grid">
               {products.map((product) => (
                 <article key={product.id} className="product-card">
                   <div>
                     <div className="product-top-bar">
-                      <span className="sku-tag">Артикул: {product.sku}</span>
+                      <span className="sku-tag">{product.sku}</span>
                       <span className={`stock-tag ${product.inStock ? 'in' : 'out'}`}>
                         {product.inStock ? 'В наявності' : 'Під замовлення'}
                       </span>
@@ -250,10 +224,17 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                     <h3 className="product-title">{product.name}</h3>
 
                     <div className="product-badges">
-                      <span className="badge-item">{product.categoryLabel}</span>
                       <span className="badge-item">{product.vehicleLabel}</span>
-                      {product.sensorsCount > 0 && (
-                        <span className="badge-item">Датчиків: {product.sensorsCount} шт.</span>
+                      {product.wheelsCount > 0 && (
+                        <span className="badge-item">Коліс: {product.wheelsCount}</span>
+                      )}
+                      {product.subscriptionMonthlyUah > 0 && (
+                        <span className="badge-item badge-saas">
+                          SaaS: {product.subscriptionMonthlyUah} грн/міс
+                        </span>
+                      )}
+                      {product.isPilot && (
+                        <span className="badge-item badge-pilot">0 грн SaaS / 6 міс.</span>
                       )}
                     </div>
 
@@ -265,22 +246,28 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                           <strong>Живлення:</strong> {product.specs.power}
                         </div>
                         <div>
-                          <strong>Склад:</strong> {product.specs.sensors}
+                          <strong>Зв’язок:</strong> {product.specs.comms}
                         </div>
                         <div>
                           <strong>Захист:</strong> {product.specs.protection}
                         </div>
-                        {product.warranty && (
-                          <div>
-                            <strong>Гарантія:</strong> {product.warranty}
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
 
                   <div className="product-footer">
-                    <div className="product-price">{product.price} грн</div>
+                    <div>
+                      <div className="product-price">
+                        {product.price.toLocaleString('uk-UA')} грн{' '}
+                        <span className="product-price-sub">(${product.priceUsd})</span>
+                      </div>
+                      {product.subscriptionMonthlyUah > 0 && (
+                        <div className="product-price-sub">
+                          + {product.subscriptionMonthlyUah} грн/міс (~${product.subscriptionUsd}) хмара
+                        </div>
+                      )}
+                    </div>
+
                     <div className="product-actions">
                       <button
                         type="button"
@@ -294,7 +281,7 @@ function CatalogPage({ initialCategory = 'all', onAddToCart }) {
                         className="btn btn-primary btn-sm"
                         onClick={() => onAddToCart(product)}
                       >
-                        У кошик
+                        Додати
                       </button>
                     </div>
                   </div>

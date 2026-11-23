@@ -6,3 +6,6 @@ client/dist/
 *.log
 .DS_Store
 Thumbs.db
+.pio/
+__pycache__/
+*.pyc

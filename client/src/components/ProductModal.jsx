@@ -5,10 +5,10 @@ function ProductModal({ product, onClose, onAddToCart }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-window" style={{ maxWidth: '620px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-window" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <span className="sku-tag">Артикул: {product.sku}</span>
+            <span className="sku-tag">SKU: {product.sku}</span>
             <h3 style={{ marginTop: '6px' }}>{product.name}</h3>
           </div>
           <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
@@ -17,21 +17,28 @@ function ProductModal({ product, onClose, onAddToCart }) {
         </div>
 
         <div className="product-badges" style={{ marginBottom: '12px' }}>
-          <span className="badge-item">{product.categoryLabel}</span>
           <span className="badge-item">{product.vehicleLabel}</span>
+          {product.wheelsCount > 0 && (
+            <span className="badge-item">Контроль коліс: {product.wheelsCount} шт.</span>
+          )}
+          {product.subscriptionMonthlyUah > 0 && (
+            <span className="badge-item badge-saas">
+              SaaS підписка: {product.subscriptionMonthlyUah} грн/міс (SIM включено)
+            </span>
+          )}
+          {product.isPilot && (
+            <span className="badge-item badge-pilot">Design Partner: 0 грн SaaS на 6 міс.</span>
+          )}
           {product.warranty && <span className="badge-item">Гарантія: {product.warranty}</span>}
-          <span className={`badge-item ${product.inStock ? '' : 'stock-tag out'}`}>
-            {product.inStock ? 'Є в наявності' : 'Під замовлення'}
-          </span>
         </div>
 
-        <p style={{ color: '#52606d', marginBottom: '16px', fontSize: '14.5px' }}>
+        <p style={{ color: '#526273', marginBottom: '16px', fontSize: '14.5px' }}>
           {product.shortDescription}
         </p>
 
         {product.packageContents && product.packageContents.length > 0 && (
           <div className="modal-section">
-            <h4>Що входить у комплект:</h4>
+            <h4>Комплектація та апаратні модулі:</h4>
             <ul className="about-list">
               {product.packageContents.map((item, idx) => (
                 <li key={idx}>{item}</li>
@@ -42,7 +49,7 @@ function ProductModal({ product, onClose, onAddToCart }) {
 
         {product.features && product.features.length > 0 && (
           <div className="modal-section">
-            <h4>Переваги для власника:</h4>
+            <h4>Технічні та бізнес-переваги:</h4>
             <ul className="about-list">
               {product.features.map((feat, idx) => (
                 <li key={idx}>{feat}</li>
@@ -57,19 +64,28 @@ function ProductModal({ product, onClose, onAddToCart }) {
               <strong>Живлення:</strong> {product.specs.power}
             </div>
             <div>
-              <strong>Склад:</strong> {product.specs.sensors}
+              <strong>Охоплення:</strong> {product.specs.sensors}
+            </div>
+            <div>
+              <strong>Зв’язок:</strong> {product.specs.comms}
             </div>
             <div>
               <strong>Захист корпусу:</strong> {product.specs.protection}
-            </div>
-            <div>
-              <strong>Монтаж:</strong> {product.specs.installation}
             </div>
           </div>
         )}
 
         <div className="product-footer">
-          <div className="product-price">{product.price} грн</div>
+          <div>
+            <div className="product-price">
+              {product.price} грн <span className="product-price-sub">(${product.priceUsd})</span>
+            </div>
+            {product.subscriptionMonthlyUah > 0 && (
+              <div className="product-price-sub">
+                + {product.subscriptionMonthlyUah} грн/міс (~${product.subscriptionUsd}) хмарна підписка
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className="btn btn-primary"
@@ -78,7 +94,7 @@ function ProductModal({ product, onClose, onAddToCart }) {
               onClose();
             }}
           >
-            Додати до замовлення
+            Додати до заявки
           </button>
         </div>
       </div>

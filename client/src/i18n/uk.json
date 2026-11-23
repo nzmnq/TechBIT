@@ -1,0 +1,29 @@
+{
+  "nav": {
+    "brandTag": "B2B IoT + SaaS • Ступиці та гальма фур",
+    "home": "Огляд і Економіка",
+    "catalog": "Каталог і Тарифи",
+    "admin": "Моніторинг (MVP)",
+    "about": "Архітектура й Про нас",
+    "cart": "Замовлення"
+  },
+  "units": {
+    "temp": "°C",
+    "vib": "mm/s",
+    "currencyUah": "грн"
+  },
+  "alert": {
+    "GREEN": "Норма",
+    "YELLOW": "Увага (Жовтий)",
+    "RED": "Критично (Червоний)",
+    "SHADOW": "Shadow Log (Тихий)"
+  },
+  "resolutions": {
+    "BEARING_FAULT": "Підшипник / Ступиця",
+    "BRAKE_STUCK": "Гальма / Супорт",
+    "TIRE_ISSUE": "Шина",
+    "SENSOR_FAULT": "Датчик / Проводка",
+    "FALSE_POSITIVE": "Дефекту не виявлено (Хибна)",
+    "OTHER": "Інше"
+  }
+}

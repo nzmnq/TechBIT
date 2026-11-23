@@ -7,12 +7,9 @@ function AboutPage({ onNavigate }) {
     async function loadAbout() {
       try {
         const res = await fetch('/api/about');
-        if (res.ok) {
-          const data = await res.json();
-          setAboutData(data);
-        }
+        if (res.ok) setAboutData(await res.json());
       } catch (err) {
-        // Fallback дані
+        // Fallback below
       }
     }
     loadAbout();
@@ -21,130 +18,100 @@ function AboutPage({ onNavigate }) {
   const teamMembers = aboutData?.teamMembers || [
     {
       name: 'Назарій Доскочинський',
-      role: 'Керівник напряму електроніки та виробництва',
+      role: 'Hardware Architecture & 24V Electronics',
       email: 'nazar.doskochynskyi@gmail.com',
       responsibility:
-        'Відповідає за надійність електронних вузлів, захист обладнання від перепадів напруги та контроль якості кожної партії перед відправкою клієнтам.'
+        'Проєктування осьових вузлів C3 IP69K, захисту живлення Load Dump 40–60V, LTE/PSRAM контролера S3 та джгутів Deutsch DT / AMP Superseal.'
     },
     {
       name: 'Тарас Недовіз',
-      role: 'Розробник програмного забезпечення та алгоритмів',
+      role: 'Firmware DSP/ESP-NOW & Cloud Software',
       email: 'nedovizt26@gmail.com',
       responsibility:
-        'Розробив алгоритми аналізу вібрації та машинного навчання, які безпомилково відрізняють нерівності дороги від реального дефекту колодки чи підшипника.'
+        'Прошивка ESP32-C3 / S3, бездротовий місток причепа ESP-NOW LR AES-128, чорна скринька, хмарний Ingest API та пайплайн ML.'
     },
     {
       name: 'Матвій Івков',
-      role: 'Інженер з монтажу, механіки та випробувань',
+      role: 'Mechanical Mounting, Field Testing & STO Rollout',
       email: 'matviyivk3@gmail.com',
       responsibility:
-        'Відповідає за герметичні корпуси IP67, універсальні кріплення під різні типи осей і консультації СТО та водіїв щодо встановлення.'
+        'Кріплення на ступицях, термостійкі герметичні корпуси, випробування на пілотних автопарках і навчання партнерських СТО.'
     }
   ];
 
   return (
     <div>
       <section className="section-box">
-        <span className="hero-badge">Про компанію TechBIT</span>
+        <span className="hero-badge hero-badge-light">Про платформу TechBIT</span>
         <h1 className="page-title">
-          Український виробник систем ранньої діагностики гальм та ходової частини авто
+          Запускаємось в Україні з архітектурною закладкою під ринок ЄС
         </h1>
-        <p className="page-subtitle" style={{ marginBottom: '12px' }}>
-          Ми допомагаємо приватним водіям, логістичним компаніям та СТО вчасно виявляти знос
-          підшипників маточини й підклинювання гальмівних колодок до того, як це призведе до поломки
-          посеред дороги.
+        <p className="page-subtitle">
+          В Україні через старіший автопарк та складні дороги підшипники й гальма ламаються в рази частіше — це дозволяє за 3–6 місяців зібрати унікальний датасет реальних поломок (Data Moat) для предиктивної ML-моделі.
         </p>
-        <p style={{ color: '#52606d' }}>
-          Наше обладнання розроблялося на основі реальних проблем водіїв фур, комерційних бусів та
-          майстрів автосервісів: коли на важкому авто не відчутно пригальмовування одного колеса або
-          складно локалізувати гул підшипника на повнопривідній машині.
-        </p>
-      </section>
 
-      <section className="section-box">
-        <h2 className="page-title">Реальні задачі, які вирішує TechBIT</h2>
-        <div className="grid-3" style={{ marginTop: '14px' }}>
+        <div className="grid-3">
           <div className="info-card">
-            <h3>Контроль фур у далеких рейсах</h3>
+            <h3>Цифрові осі без наводок</h3>
             <p>
-              На навантаженій фурі водій у кабіні часто не відчуває, що на одному з коліс почали
-              підклинювати колодки. TechBIT фіксує проблему на самому початку — до перегріву диска,
-              закипання рідини та ризику загоряння.
+              На передній осі також стоїть вузол <code>C3</code> (ніяких аналогових кабелів 2–3 м у кабіну!). Оцифровка відбувається біля ступиці, а у кабіну на <code>S3</code> йдуть захищені цифрові пакети по CAN.
             </p>
           </div>
 
           <div className="info-card">
-            <h3>Причепи, лафети та буси</h3>
+            <h3>Чому ESP-NOW, а не перекидка чи LoRa</h3>
             <p>
-              На комерційних лафетах і мікроавтобусах малі колеса несуть високе навантаження.
-              Датчики на осі вчасно сигналізують про втому підшипника або нерівномірну роботу гальм.
+              CAN через перекидку причепа рветься й ловить завади 24V, а LoRa 868 МГц має ліміт ефіру 1% у ЄС і не пропустить 50 КБ дампу чорної скриньки. <code>ESP-NOW LR AES-128</code> дає зв’язок за ~1 с без втручання в ABS.
             </p>
           </div>
 
           <div className="info-card">
-            <h3>Швидка діагностика на СТО (4WD/AWD)</h3>
+            <h3>Закладка на ЄС з першого дня</h3>
             <p>
-              На повнопривідних авто важко вручну розкрутити колесо на підйомнику, щоб почути гул
-              підшипника. Система TechBIT точно вказує на проблемний вузол під час короткого
-              тестового заїзду.
+              Роздільна БД <code>Tractor / Trailer / Node</code> (Drop & Hook), LTE-модем із європейськими діапазонами B1/B3/B7/B8/B20, таймстемпи строго в <code>UTC</code>, одиниці СІ, i18n та готова шина для J1939 і Wialon/Webfleet.
             </p>
           </div>
         </div>
       </section>
 
       <section className="section-box">
-        <h2 className="page-title">Надійність, сервіс та гарантії</h2>
-        <div className="grid-2" style={{ marginTop: '14px' }}>
+        <h2 className="page-title">Етапи масштабування продукту</h2>
+        <div className="grid-3" style={{ marginTop: '12px' }}>
           <div className="info-card">
-            <h3>Створено для реальних українських доріг</h3>
-            <ul className="about-list">
-              <li>
-                <strong>Захист IP67:</strong> Датчики не бояться води, снігу, глибоких калюж, пилу
-                та дорожніх реагентів.
-              </li>
-              <li>
-                <strong>Стійкість до ударів:</strong> Система витримує різкі перевантаження при
-                попаданні в яму та миттєво повертається до штатної роботи.
-              </li>
-              <li>
-                <strong>Розумна фільтрація:</strong> Погана дорога або бруківка не сприймаються як
-                поломка, оскільки порівнюються всі колеса.
-              </li>
-            </ul>
+            <div className="info-card-step">MVP Зараз (Україна)</div>
+            <h3>Rule-based + Black Box</h3>
+            <p>
+              Жорсткі фізичні пороги (ΔT, вібрація) + міні LED-індикатор + Telegram-тікети для збору перших 50–100 підтверджених діагнозів.
+            </p>
           </div>
 
           <div className="info-card">
-            <h3>Умови для клієнтів та партнерів</h3>
-            <ul className="about-list">
-              <li>
-                <strong>Гарантія 12 місяців:</strong> Повна гарантійна підтримка на всі комплекти та
-                окремі датчики.
-              </li>
-              <li>
-                <strong>Готовність до розширення:</strong> Почавши з комплекту на 2 датчики (1 вісь),
-                ви завжди можете докупити ще 2 датчики до повної системи.
-              </li>
-              <li>
-                <strong>Підтримка підключення:</strong> Консультуємо щодо монтажу та підключення
-                живлення до лінії ACC як для 12V, так і для 24V мережі.
-              </li>
-            </ul>
+            <div className="info-card-step">Фаза 1 (4–9 міс.)</div>
+            <h3>ML RUL-прогноз та J1939</h3>
+            <p>
+              Попередження за 500–3 000 км до аварії, читання помилок бортового комп’ютера J1939 (Read-Only), вебхуки в Wialon і ROI-звіти для власника.
+            </p>
+          </div>
+
+          <div className="info-card">
+            <div className="info-card-step">Фаза 2 (ЄС / 9–18 міс.)</div>
+            <h3>E-mark (UN ECE R10) & HaaS</h3>
+            <p>
+              Сертифікація для лізингових парків, автономний причеп (NB-IoT + АКБ), інтеграції Webfleet/Samsara та знижки на страхування КАСКО від пожеж.
+            </p>
           </div>
         </div>
       </section>
 
       <section className="section-box">
         <h2 className="page-title">Команда TechBIT</h2>
-        <p className="page-subtitle">
-          Фахівці, які відповідають за розробку, якість обладнання та підтримку клієнтів:
-        </p>
-        <div className="grid-3">
+        <div className="grid-3" style={{ marginTop: '12px' }}>
           {teamMembers.map((member) => (
             <div key={member.email} className="info-card">
               <div className="info-card-step">{member.role}</div>
               <h3>{member.name}</h3>
               <p style={{ marginBottom: '10px' }}>{member.responsibility}</p>
-              <div style={{ fontSize: '12.5px', color: '#1f5fa8', fontWeight: 600 }}>
+              <div style={{ fontSize: '12.5px', color: '#1a56a0', fontWeight: 600 }}>
                 <a href={`mailto:${member.email}`}>{member.email}</a>
               </div>
             </div>
@@ -153,37 +120,19 @@ function AboutPage({ onNavigate }) {
       </section>
 
       <section className="section-box">
-        <h2 className="page-title">Зв’язатися з нами</h2>
-        <p className="page-subtitle">
-          Потрібна консультація щодо сумісності або оптового замовлення для автопарку? Напишіть нам
-          або перейдіть до каталогу:
-        </p>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => onNavigate && onNavigate('catalog')}
-          >
-            Перейти в каталог
+        <h2 className="page-title">Готові обговорити пілот для автопарку?</h2>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
+          <button type="button" className="btn btn-primary" onClick={() => onNavigate('catalog')}>
+            Перейти в каталог B2B
           </button>
-          <a
-            href="https://instagram.com"
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-secondary"
-          >
-            Instagram
-          </a>
-          <a
-            href="https://t.me"
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-secondary"
-          >
+          <button type="button" className="btn btn-amber" onClick={() => onNavigate('admin')}>
+            Спробувати консоль моніторингу
+          </button>
+          <a href="https://t.me" target="_blank" rel="noreferrer" className="btn btn-secondary">
             Telegram
           </a>
           <a href="mailto:nedovizt26@gmail.com" className="btn btn-secondary">
-            Email: nedovizt26@gmail.com
+            nedovizt26@gmail.com
           </a>
         </div>
       </section>
