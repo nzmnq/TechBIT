@@ -162,8 +162,9 @@ BurstTriggerEvent RuleEngine::update(uint32_t nowMs) {
         const can2::AxleTelemetry& t = n.telemetry;
         const float maxTemp = std::max(t.tempLeftC, t.tempRightC);
         const float tempDelta = std::fabs(t.tempLeftC - t.tempRightC);
-        n.rightIsHotSide = (t.tempRightC > t.tempLeftC) ||
-                           (tempDelta < 3.0f && t.vibRmsRight > t.vibRmsLeft);
+        n.rightIsHotSide = (tempDelta >= 3.0f)
+                               ? (t.tempRightC > t.tempLeftC)
+                               : (t.vibRmsRight > t.vibRmsLeft);
 
         const float minSideVib = std::max(0.6f, std::min(t.vibRmsLeft, t.vibRmsRight));
         const float maxSideVib = std::max(t.vibRmsLeft, t.vibRmsRight);
