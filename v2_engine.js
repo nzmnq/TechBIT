@@ -1,14 +1,9 @@
 'use strict';
 
 // ============================================================================
-// TechBIT v2.1 Diagnostics & Rule Engine (JavaScript Parity with C++ RuleEngine)
-// Supports configurable bench profiles & sensor types:
-//   - rigProfile:
-//       'mvp_front'  -> Front Left (T1-L) + Front Right (T1-R) + S3 Master (Default MVP)
-//       'tractor_4'  -> Tractor 2 axles (T1, T2 = 4 wheels) + S3 Master
-//       'full_10'    -> Full coupling (Tractor T1..T2 + C3 Bridge + Trailer P1..P3 = 10 wheels)
-//   - tempSensorType: 'sht40' | 'ntc' | 'dual'
-//   - vibSensorType:  'piezo_mcp6002' | 'piezo_direct' | 'mems_imu'
+// TechBIT v2.2 Diagnostics & Rule Engine (JavaScript Parity with C++ RuleEngine)
+// Per-module sensor configuration for MVP bench (Front Left, Front Right, S3 Master)
+// plus expandable Truck (4 wheels) and Full Coupling (10 wheels + ESP-NOW Bridge).
 // ============================================================================
 
 const RIG_PROFILES = {
@@ -40,6 +35,8 @@ const RIG_PROFILES = {
 
 const TEMP_SENSOR_TYPES = ['sht40', 'ntc', 'dual'];
 const VIB_SENSOR_TYPES = ['piezo_mcp6002', 'piezo_direct', 'mems_imu'];
+const S3_MODES = ['s3_can_lte_led', 's3_usb_bench', 's3_ble_bridge'];
+const S3_LINKS = ['can_500k', 'usb_direct', 'wifi_push'];
 
 const AXLE_SLOTS = [
   { slot: 1, key: 'T1', asset: 'tractor', axleNum: 1, label: 'Тягач • Передня вісь', codeL: 'T1-L', codeR: 'T1-R' },
@@ -49,10 +46,19 @@ const AXLE_SLOTS = [
   { slot: 5, key: 'P3', asset: 'trailer', axleNum: 3, label: 'Причеп • Вісь 3',       codeL: 'P3-L', codeR: 'P3-R' },
 ];
 
+function createDefaultModuleSensors() {
+  return {
+    frontLeft: { vib: 'piezo_mcp6002', temp: 'sht40' },
+    frontRight: { vib: 'piezo_mcp6002', temp: 'sht40' },
+    s3Master: { mode: 's3_can_lte_led', link: 'can_500k' },
+  };
+}
+
 const DEFAULT_CONFIG = {
   rigProfile: 'mvp_front',
   tempSensorType: 'sht40',
   vibSensorType: 'piezo_mcp6002',
+  moduleSensors: createDefaultModuleSensors(),
   tempWarnC: 70.0,
   tempCritC: 95.0,
   axleTempDeltaWarnC: 18.0,
@@ -136,7 +142,24 @@ function makeUuid(ts, nodeStr, seq) {
 
 class TechBitV2Engine {
   constructor(initialConfig = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...initialConfig };
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...initialConfig,
+      moduleSensors: {
+        frontLeft: {
+          ...createDefaultModuleSensors().frontLeft,
+          ...(initialConfig.moduleSensors?.frontLeft || {}),
+        },
+        frontRight: {
+          ...createDefaultModuleSensors().frontRight,
+          ...(initialConfig.moduleSensors?.frontRight || {}),
+        },
+        s3Master: {
+          ...createDefaultModuleSensors().s3Master,
+          ...(initialConfig.moduleSensors?.s3Master || {}),
+        },
+      },
+    };
     if (!RIG_PROFILES[this.config.rigProfile]) {
       this.config.rigProfile = 'mvp_front';
     }
@@ -149,6 +172,15 @@ class TechBitV2Engine {
 
   isSlotInProfile(slot) {
     return this.getProfileMeta().slots.includes(slot);
+  }
+
+  getSideSensorConfig(code) {
+    if (code === 'T1-L') return this.config.moduleSensors.frontLeft;
+    if (code === 'T1-R') return this.config.moduleSensors.frontRight;
+    return {
+      vib: this.config.vibSensorType,
+      temp: this.config.tempSensorType,
+    };
   }
 
   reset() {
@@ -186,7 +218,7 @@ class TechBitV2Engine {
     };
 
     this.indicator = {
-      driverSeverity: 'STANDBY', // 'STANDBY' | 'GREEN' | 'YELLOW' | 'RED'
+      driverSeverity: 'STANDBY',
       wheelCode: '—',
       buzzerOn: false,
       shadowCount: 0,
@@ -227,13 +259,58 @@ class TechBitV2Engine {
       this.config.rigProfile = patch.rigProfile;
       changed = true;
     }
+
+    // Global fallbacks also mirror to frontLeft/frontRight if moduleSensors not explicitly passed
     if (patch.tempSensorType && TEMP_SENSOR_TYPES.includes(patch.tempSensorType)) {
       if (patch.tempSensorType !== this.config.tempSensorType) changed = true;
       this.config.tempSensorType = patch.tempSensorType;
+      if (!patch.moduleSensors) {
+        this.config.moduleSensors.frontLeft.temp = patch.tempSensorType;
+        this.config.moduleSensors.frontRight.temp = patch.tempSensorType;
+      }
     }
     if (patch.vibSensorType && VIB_SENSOR_TYPES.includes(patch.vibSensorType)) {
       if (patch.vibSensorType !== this.config.vibSensorType) changed = true;
       this.config.vibSensorType = patch.vibSensorType;
+      if (!patch.moduleSensors) {
+        this.config.moduleSensors.frontLeft.vib = patch.vibSensorType;
+        this.config.moduleSensors.frontRight.vib = patch.vibSensorType;
+      }
+    }
+
+    // Per-module sensor selection (Front Left T1-L, Front Right T1-R, S3 Master)
+    if (patch.moduleSensors && typeof patch.moduleSensors === 'object') {
+      const ms = patch.moduleSensors;
+      if (ms.frontLeft) {
+        if (VIB_SENSOR_TYPES.includes(ms.frontLeft.vib) && ms.frontLeft.vib !== this.config.moduleSensors.frontLeft.vib) {
+          this.config.moduleSensors.frontLeft.vib = ms.frontLeft.vib;
+          changed = true;
+        }
+        if (TEMP_SENSOR_TYPES.includes(ms.frontLeft.temp) && ms.frontLeft.temp !== this.config.moduleSensors.frontLeft.temp) {
+          this.config.moduleSensors.frontLeft.temp = ms.frontLeft.temp;
+          changed = true;
+        }
+      }
+      if (ms.frontRight) {
+        if (VIB_SENSOR_TYPES.includes(ms.frontRight.vib) && ms.frontRight.vib !== this.config.moduleSensors.frontRight.vib) {
+          this.config.moduleSensors.frontRight.vib = ms.frontRight.vib;
+          changed = true;
+        }
+        if (TEMP_SENSOR_TYPES.includes(ms.frontRight.temp) && ms.frontRight.temp !== this.config.moduleSensors.frontRight.temp) {
+          this.config.moduleSensors.frontRight.temp = ms.frontRight.temp;
+          changed = true;
+        }
+      }
+      if (ms.s3Master) {
+        if (S3_MODES.includes(ms.s3Master.mode) && ms.s3Master.mode !== this.config.moduleSensors.s3Master.mode) {
+          this.config.moduleSensors.s3Master.mode = ms.s3Master.mode;
+          changed = true;
+        }
+        if (S3_LINKS.includes(ms.s3Master.link) && ms.s3Master.link !== this.config.moduleSensors.s3Master.link) {
+          this.config.moduleSensors.s3Master.link = ms.s3Master.link;
+          changed = true;
+        }
+      }
     }
 
     for (const k of numKeys) {
@@ -246,6 +323,7 @@ class TechBitV2Engine {
       if (this.config.shadowModeEnabled !== patch.shadowModeEnabled) changed = true;
       this.config.shadowModeEnabled = patch.shadowModeEnabled;
     }
+
     if (changed) {
       this.config.configVersion += 1;
       for (const ax of this.axles) {
@@ -268,7 +346,6 @@ class TechBitV2Engine {
       return { slot: null, sideOnly: null };
     }
     const str = String(slotOverride).trim().toUpperCase();
-    // Single-wheel override for bench testing 2 separate boards on T1-L and T1-R!
     const wheelMatch = str.match(/^([TP])([1-3])-([LR])$/);
     if (wheelMatch) {
       const slotMap = { T1: 1, T2: 2, P1: 3, P2: 4, P3: 5 };
@@ -308,8 +385,8 @@ class TechBitV2Engine {
   }
 
   evaluateSideHardware(sideObj) {
-    // Vref validation applies specifically when using MCP6002 analog front-end
-    if (this.config.vibSensorType !== 'piezo_mcp6002') {
+    const sensorCfg = this.getSideSensorConfig(sideObj.code);
+    if (sensorCfg.vib !== 'piezo_mcp6002') {
       sideObj.vrefStatus = 'NA';
     } else if (sideObj.dcOffsetMv !== null && Number.isFinite(sideObj.dcOffsetMv)) {
       sideObj.vrefStatus =
@@ -320,8 +397,7 @@ class TechBitV2Engine {
       sideObj.vrefStatus = 'UNKNOWN';
     }
 
-    // Condensation check applies when SHT40 humidity sensor is active
-    if (this.config.tempSensorType === 'ntc') {
+    if (sensorCfg.temp === 'ntc') {
       sideObj.humidityWarn = false;
     } else {
       sideObj.humidityWarn =
@@ -352,7 +428,6 @@ class TechBitV2Engine {
     if (!pkt || typeof pkt !== 'object') return false;
     const override = this.parseSlotOverride(slotOverride);
 
-    // 1. Unified v2 C3 Axle Node (L+R wheels, or single-wheel USB override T1-L / T1-R)
     if (pkt.type === 'techbit_c3_node') {
       const fromTrailer = Boolean(pkt.fromTrailer) || Number(pkt.slot) >= 3;
       const slot = this.resolveSlot(
@@ -385,7 +460,6 @@ class TechBitV2Engine {
       return true;
     }
 
-    // 2. Trailer Wireless Bridge (C3 ESP-NOW LR AES-128)
     if (pkt.type === 'techbit_trailer_bridge') {
       this.bridge.seenEver = true;
       this.bridge.online = true;
@@ -402,7 +476,6 @@ class TechBitV2Engine {
       return true;
     }
 
-    // 3. Cabin S3 Master snapshot
     if (pkt.type === 'techbit_s3_master') {
       this.s3Master.seenEver = true;
       this.s3Master.online = true;
@@ -449,7 +522,6 @@ class TechBitV2Engine {
       return true;
     }
 
-    // 4. Backward compatibility: legacy v1 single-wheel packet (`type: 'techbit_node'`)
     if (pkt.type === 'techbit_node') {
       const wId = Number(pkt.wheelId ?? 0);
       const slot = override.slot !== null ? override.slot : wId <= 1 ? 1 : 2;
@@ -521,17 +593,14 @@ class TechBitV2Engine {
       tractor_id: this.tractorId,
       trailer_id: this.getProfileMeta().hasBridge ? this.trailerId : null,
       rig_profile: this.config.rigProfile,
-      sensors: {
-        vibration: this.config.vibSensorType,
-        temperature: this.config.tempSensorType,
-      },
+      module_sensors: this.config.moduleSensors,
       packet_type: 'ANOMALY_BURST',
       event_id: eventId,
       severity,
       trigger_node_id: ax.nodeId,
       wheel_code: wheelCode,
       trigger_reason: reason,
-      firmware_version: '2.1.0-mvp',
+      firmware_version: '2.2.0-mvp',
       config_version: this.config.configVersion,
       summary,
       burst_samples_base64: burstB64,
@@ -595,8 +664,6 @@ class TechBitV2Engine {
     this.lastUpdateMs = nowMs;
 
     const profile = this.getProfileMeta();
-
-    // 1. Honest timeout watchdog for axles, individual wheels, bridge, and S3 Master
     let activeAxles = 0;
     let activeWheels = 0;
     let offlineAxles = 0;
@@ -640,9 +707,6 @@ class TechBitV2Engine {
 
     const fleetMeanVib = activeAxles > 0 ? Math.max(0.8, vibSum / activeAxles) : 1.0;
 
-    // Rough cobblestone detection:
-    // - Multi-axle profiles: >= 2 axles share elevated vibration simultaneously
-    // - Single-axle MVP bench (T1-L + T1-R): both left & right wheels share elevated symmetric vibration
     let roughCount = 0;
     for (const ax of this.axles) {
       if (!ax.online || !profile.slots.includes(ax.slot)) continue;
@@ -658,13 +722,12 @@ class TechBitV2Engine {
           ax.right.rmsMmS >= this.config.vibWarnRmsMmS &&
           maxV / minV < 1.35
         ) {
-          roughCount = 2; // Both front wheels riding cobblestone symmetrically
+          roughCount = 2;
         }
       }
     }
     const roughRoadAllWheels = roughCount >= 2;
 
-    // 2. Evaluate rules per active axle inside the selected rig profile
     let highestSev = activeAxles > 0 ? 'GREEN' : 'STANDBY';
     let highestCode = activeAxles > 0 ? 'OK' : '—';
     const yellowConfirmMs = this.config.yellowConfirmSec * 1000;
@@ -827,7 +890,14 @@ class TechBitV2Engine {
       trailerId: this.trailerId,
       deviceId: this.deviceId,
       profile: this.getProfileMeta(),
-      config: { ...this.config },
+      config: {
+        ...this.config,
+        moduleSensors: {
+          frontLeft: { ...this.config.moduleSensors.frontLeft },
+          frontRight: { ...this.config.moduleSensors.frontRight },
+          s3Master: { ...this.config.moduleSensors.s3Master },
+        },
+      },
       indicator: { ...this.indicator },
       bridge: { ...this.bridge },
       s3Master: {
@@ -835,8 +905,8 @@ class TechBitV2Engine {
         blackBoxRecs: Math.max(this.s3Master.blackBoxRecs, this.blackBoxRing.length),
       },
       axles: this.axles,
-      burstEvents: this.burstEvents.slice(0, 8),
-      incidents: this.incidents.slice(0, 15),
+      burstEvents: this.burstEvents.slice(0, 12),
+      incidents: this.incidents.slice(0, 25),
     };
   }
 }
@@ -845,6 +915,8 @@ module.exports = {
   RIG_PROFILES,
   TEMP_SENSOR_TYPES,
   VIB_SENSOR_TYPES,
+  S3_MODES,
+  S3_LINKS,
   AXLE_SLOTS,
   DEFAULT_CONFIG,
   TechBitV2Engine,

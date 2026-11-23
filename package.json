@@ -1,11 +1,22 @@
 {
   "name": "techbit-test-web-interface",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "private": true,
-  "description": "TechBIT v2.0 Engineering Workbench — 10-Wheel Truck & Trailer Diagnostics (C3 Axle Nodes, ESP-NOW Bridge, S3 Master Black Box, SHT40 & FFT)",
+  "description": "TechBIT v2.2 React Router SPA Workbench — MVP Front L/R + S3 Master & 10-Wheel Truck Diagnostics",
   "main": "server.js",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
     "start": "node server.js",
     "test": "node test_truthfulness.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.0"
   }
 }
