@@ -1,8 +1,31 @@
-node_modules/
-client/node_modules/
-server/node_modules/
-client/dist/
-.env
-*.log
+# OS
 .DS_Store
 Thumbs.db
+
+# KiCad local state, backups & lock files
+*.kicad_prl
+*-backups/
+*_autosave-*
+_autosave-*
+*~
+*.bak
+*.bck
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.lck
+~*.lck
+*.000
+fp-info-cache
+sym-lib-table~
+fp-lib-table~
+
+# KiCad temporary netlists / reports
+*.cir
+*.net
+*-save.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
