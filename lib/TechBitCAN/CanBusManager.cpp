@@ -61,7 +61,27 @@ bool CanBusManager::sendFrame(uint32_t stdId, const uint8_t data[8], uint8_t dlc
     msg.identifier       = stdId & 0x7FFU;
     msg.extd             = 0;
     msg.rtr              = 0;
-    msg.ss               = 1; // Single-shot avoids blocking retry flood if peer is temporarily offline
+    msg.ss               = 1;
+    msg.data_length_code = (dlc > 8) ? 8 : dlc;
+    std::memcpy(msg.data, data, msg.data_length_code);
+
+    if (twai_transmit(&msg, 0) == ESP_OK) {
+        ++txCount_;
+        return true;
+    }
+
+    ++txErrorCount_;
+    return false;
+}
+
+bool CanBusManager::sendExtendedFrame(uint32_t extId, const uint8_t data[8], uint8_t dlc) {
+    if (!ready_) return false;
+
+    twai_message_t msg = {};
+    msg.identifier       = extId & 0x1FFFFFFFU;
+    msg.extd             = 1;
+    msg.rtr              = 0;
+    msg.ss               = 1;
     msg.data_length_code = (dlc > 8) ? 8 : dlc;
     std::memcpy(msg.data, data, msg.data_length_code);
 
@@ -82,12 +102,13 @@ bool CanBusManager::receiveFrame(CanFrame& outFrame) {
         return false;
     }
 
-    if (msg.extd || msg.rtr) {
+    if (msg.rtr) {
         return false;
     }
 
-    outFrame.id  = msg.identifier;
-    outFrame.dlc = msg.data_length_code;
+    outFrame.id       = msg.identifier;
+    outFrame.dlc      = msg.data_length_code;
+    outFrame.extended = (msg.extd != 0);
     std::memset(outFrame.data, 0, sizeof(outFrame.data));
     if (msg.data_length_code > 0) {
         const uint8_t copyLen = (msg.data_length_code > 8) ? 8 : msg.data_length_code;

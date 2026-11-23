@@ -5,8 +5,8 @@
 namespace techbit {
 namespace dsp {
 
-static constexpr uint16_t kDspFftSize   = 512;
-static constexpr uint8_t  kDspLog2N     = 9;
+static constexpr uint16_t kDspFftSize   = 256;
+static constexpr uint8_t  kDspLog2N     = 8;
 static constexpr uint16_t kDspHalfSize  = kDspFftSize / 2;
 
 struct VibrationFeatures {

@@ -7,11 +7,12 @@ namespace techbit {
 struct CanFrame {
     uint32_t id;
     uint8_t  dlc;
+    bool     extended;
     uint8_t  data[8];
 };
 
-// Hardware TWAI (CAN 2.0A @ 500 kbps) wrapper for ESP32-C3 and ESP32-S3
-// wired to SN65HVD230 CAN transceivers. Includes automatic bus-off recovery.
+// Hardware TWAI (CAN 2.0A/2.0B @ 500 kbps) wrapper for ESP32-C3 and ESP32-S3
+// with automatic bus-off recovery. Supports 29-bit Node-ID extended frames.
 class CanBusManager {
 public:
     CanBusManager();
@@ -19,8 +20,8 @@ public:
     bool begin(int txPin, int rxPin, bool noAckLoopback = false);
     void end();
 
-    // Non-blocking send (returns true if queued into TWAI hardware FIFO)
     bool sendFrame(uint32_t stdId, const uint8_t data[8], uint8_t dlc = 8);
+    bool sendExtendedFrame(uint32_t extId, const uint8_t data[8], uint8_t dlc = 8);
 
     // Non-blocking receive
     bool receiveFrame(CanFrame& outFrame);

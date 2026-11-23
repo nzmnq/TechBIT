@@ -10,8 +10,8 @@ namespace dsp {
 static constexpr float kPi = 3.14159265358979323846f;
 
 VibrationDSP::VibrationDSP()
-    : sampleRateHz_(20000.0f),
-      binWidthHz_(20000.0f / static_cast<float>(kDspFftSize)),
+    : sampleRateHz_(10000.0f),
+      binWidthHz_(10000.0f / static_cast<float>(kDspFftSize)),
       mvPerCount_(2550.0f / 4095.0f),
       initialized_(false) {
     std::memset(hann_, 0, sizeof(hann_));
@@ -186,7 +186,7 @@ VibrationFeatures VibrationDSP::processCenteredMv(const float* samplesMv, bool s
     uint16_t kLowEnd    = static_cast<uint16_t>(std::floor(600.0f / binWidthHz_));
     uint16_t kMidEnd    = static_cast<uint16_t>(std::floor(2500.0f / binWidthHz_));
     uint16_t kHighEnd   = static_cast<uint16_t>(
-        std::min(static_cast<float>(kDspHalfSize - 2), std::floor(8000.0f / binWidthHz_)));
+        std::min(static_cast<float>(kDspHalfSize - 2), std::floor(4500.0f / binWidthHz_)));
 
     float powLow  = 0.0f;
     float powMid  = 0.0f;
