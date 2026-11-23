@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechBIT — Діагностичний стенд ESP32-C3</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-badge">TechBIT DIAG</div>
+      <div>
+        <h1>Інженерний стенд моніторингу та відладки (ESP32-C3 SuperMini)</h1>
+        <p class="subtitle">
+          АЦП 20 kSPS DMA (GPIO2) • FFT 512-pt • GY-SHT40 I2C 0x44 (GPIO8/9) • CAN 500 kbps (GPIO21/20) • TinyML MLP
+        </p>
+      </div>
+    </div>
+
+    <div class="topbar-status">
+      <span id="source-pill" class="pill pill-waiting">ОЧІКУВАННЯ ESP32-C3</span>
+      <span id="rate-pill" class="pill pill-muted">0 pkt/s</span>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Warning Banner: only visible during Bench Simulator mode -->
+    <div id="sim-warning-banner" class="alert-banner alert-sim" hidden>
+      <strong>РЕЖИМ СТЕНДОВОЇ СИМУЛЯЦІЇ (НЕ ФІЗИЧНИЙ ДАТЧИК):</strong>
+      виводяться синтетичні тестові патерни (<span id="sim-banner-scenario">smooth</span>).
+      При надходженні реального пакета від ESP32-C3 симулятор автоматично вимкнеться.
+    </div>
+
+    <!-- Hardware / System Verdict Banner -->
+    <section class="verdict-bar" aria-live="polite">
+      <div class="verdict-main">
+        <span id="verdict-badge" class="verdict-badge verdict-ok">STANDBY</span>
+        <div>
+          <div id="verdict-title" class="verdict-title">Немає активних колісних вузлів</div>
+          <div id="verdict-details" class="verdict-details">
+            Підключіть ESP32-C3 по USB-C (Web Serial) або налаштуйте Wi-Fi POST на цей сервер.
+          </div>
+        </div>
+      </div>
+
+      <div class="verdict-actions">
+        <button type="button" id="btn-web-serial" class="btn btn-primary">Підключити USB Порт 1</button>
+        <button type="button" id="btn-web-serial-2" class="btn btn-primary">Підключити USB Порт 2</button>
+        <button type="button" id="btn-cal" class="btn btn-secondary">Калібрувати 5с (cal)</button>
+        <button type="button" id="btn-reset" class="btn btn-secondary">Скинути тривоги (reset)</button>
+        <button type="button" id="btn-mute" class="btn btn-secondary">Зумер (mute)</button>
+        <button type="button" id="btn-clear" class="btn btn-danger">Очистити</button>
+      </div>
+    </section>
+
+    <!-- Connection & Simulator Control Strip -->
+    <section class="connection-strip">
+      <div class="conn-card">
+        <h2>1. USB-C Web Serial (до 2 портів одночасно)</h2>
+        <div class="serial-ports-stack">
+          <div class="serial-port-row">
+            <span class="port-badge" id="port-badge-1">ПОРТ 1</span>
+            <span id="serial-status-text" class="muted serial-port-status">Не підключено</span>
+            <select id="port-wheel-map-1" class="port-map-select" title="Колесо для Порту 1">
+              <option value="auto">Авто ID</option>
+              <option value="0">0 — FL</option>
+              <option value="1">1 — FR</option>
+              <option value="2">2 — RL</option>
+              <option value="3">3 — RR</option>
+            </select>
+          </div>
+          <div class="serial-port-row">
+            <span class="port-badge" id="port-badge-2">ПОРТ 2</span>
+            <span id="serial-status-text-2" class="muted serial-port-status">Не підключено</span>
+            <select id="port-wheel-map-2" class="port-map-select" title="Колесо для Порту 2">
+              <option value="auto">Авто ID</option>
+              <option value="0">0 — FL</option>
+              <option value="1">1 — FR</option>
+              <option value="2">2 — RL</option>
+              <option value="3">3 — RR</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="conn-card">
+        <h2>2. Wi-Fi HTTP Push (від ESP32-C3)</h2>
+        <p id="wifi-url-text" class="mono-small single-line-url" tabindex="0"><span>POST http://localhost:5050/api/telemetry</span></p>
+      </div>
+
+      <form id="ip-poll-form" class="conn-card conn-inline-form">
+        <label for="esp-ip-input">3. Опитування ESP32-C3 IP:</label>
+        <div class="inline-row">
+          <input id="esp-ip-input" type="text" placeholder="192.168.4.1 або 192.168.x.x" />
+          <button type="submit" id="btn-ip-poll" class="btn btn-secondary btn-sm">Підключити</button>
+          <button type="button" id="btn-ip-stop" class="btn btn-secondary btn-sm" hidden>Стоп</button>
+        </div>
+      </form>
+
+      <div class="conn-card conn-inline-form">
+        <label for="sim-scenario-select">4. Стендовий симулятор (тест інтерфейсу):</label>
+        <div class="inline-row">
+          <select id="sim-scenario-select">
+            <option value="smooth">Рівний асфальт (Норма)</option>
+            <option value="cobblestone">Бруківка 4 колеса (BAD_ROAD)</option>
+            <option value="axle_transition">Заїзд передньою віссю на бруківку</option>
+            <option value="pothole_clip">Яма + BAT54S кліпінг + каскад RL</option>
+            <option value="brake_drag_heat">Клин гальм FR + перегрів 78.4°C</option>
+            <option value="bearing_wear">Знос підшипника RR (1480 Гц)</option>
+            <option value="dead_piezo">Обрив п'єзодатчика RL (&lt;1.8 мВ)</option>
+            <option value="vref_fault">Апаратна поломка Vref FL + волога RL</option>
+          </select>
+          <button type="button" id="btn-sim-toggle" class="btn btn-warning btn-sm">Увімкнути симулятор</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 Wheel Cards -->
+    <section class="wheels-grid" aria-label="Стан чотирьох коліс">
+      <!-- Rendered dynamically into these 4 fixed containers to keep DOM stable -->
+      <article class="wheel-card" id="wheel-card-0" data-wheel="0"></article>
+      <article class="wheel-card" id="wheel-card-1" data-wheel="1"></article>
+      <article class="wheel-card" id="wheel-card-2" data-wheel="2"></article>
+      <article class="wheel-card" id="wheel-card-3" data-wheel="3"></article>
+    </section>
+
+    <!-- Engineering Workbench Tabs -->
+    <section class="workbench-box">
+      <div class="tablist scroller" role="tablist" focusgroup="tablist nomemory" aria-label="Інструменти інженерної діагностики">
+        <button type="button" role="tab" id="tab-charts" aria-selected="true" focusgroupstart>
+          Осцилограф та Спектр Фур'є (FFT)
+        </button>
+        <button type="button" role="tab" id="tab-ml" aria-selected="false">
+          Інспектор TinyML та Запис CSV
+        </button>
+        <button type="button" role="tab" id="tab-debug" aria-selected="false">
+          Пороги, Залізо та Консоль
+        </button>
+      </div>
+
+      <!-- Tab Panel 1: Oscilloscope & FFT Spectrum -->
+      <div role="tabpanel" id="panel-charts" aria-labelledby="tab-charts" tabindex="0">
+        <div class="panel-inner">
+          <div class="charts-toolbar">
+            <div class="inline-row">
+              <label for="fft-wheel-select">Колесо для спектра FFT:</label>
+              <select id="fft-wheel-select">
+                <option value="0">FL (Переднє ліве)</option>
+                <option value="1">FR (Переднє праве)</option>
+                <option value="2">RL (Заднє ліве)</option>
+                <option value="3">RR (Заднє праве)</option>
+              </select>
+            </div>
+            <div class="inline-row">
+              <label class="checkbox-label" for="chk-freeze-charts">
+                <input type="checkbox" id="chk-freeze-charts" />
+                <span>Заморозити графіки (Freeze)</span>
+              </label>
+              <button type="button" id="btn-clear-charts" class="btn btn-secondary btn-sm">Очистити графіки</button>
+            </div>
+          </div>
+
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Часова діаграма RMS вібрації (мВ)</h3>
+                <span class="legend">
+                  <i class="dot dot-fl"></i>FL
+                  <i class="dot dot-fr"></i>FR
+                  <i class="dot dot-rl"></i>RL
+                  <i class="dot dot-rr"></i>RR
+                </span>
+              </div>
+              <canvas id="canvas-rms" width="760" height="260"></canvas>
+            </div>
+
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Спектр Фур'є 0–8000 Гц (32 біни по 250 Гц)</h3>
+                <span id="fft-meta" class="mono-small">fDom: — | fCent: —</span>
+              </div>
+              <canvas id="canvas-fft" width="760" height="260"></canvas>
+              <p id="fft-honest-note" class="muted" hidden>
+                Поточне джерело (CAN Hub) не передає 32-біновий спектр — підключіть колісний вузол напряму по USB або Wi-Fi для повного спектра.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Panel 2: TinyML Inspector & CSV Recorder -->
+      <div role="tabpanel" id="panel-ml" aria-labelledby="tab-ml" hidden="until-found">
+        <div class="panel-inner">
+          <div class="recorder-bar">
+            <div class="inline-row">
+              <label for="csv-label-select">Мітка класу для запису CSV:</label>
+              <select id="csv-label-select">
+                <option value="auto">Авто (поточний вивід ML)</option>
+                <option value="0">0 — NORMAL (рівна дорога)</option>
+                <option value="1">1 — BAD_ROAD (бруківка / тряска)</option>
+                <option value="2">2 — POTHOLE_IMPACT (яма / удар)</option>
+                <option value="3">3 — ANOMALY_FAULT (підшипник / клин колодок)</option>
+              </select>
+              <button type="button" id="btn-csv-record" class="btn btn-primary btn-sm">Почати запис CSV</button>
+              <button type="button" id="btn-csv-download" class="btn btn-secondary btn-sm" disabled>Завантажити CSV</button>
+              <button type="button" id="btn-csv-clear" class="btn btn-secondary btn-sm">Скинути (0 рядків)</button>
+            </div>
+            <div class="mono-small">
+              Записано кадрів: <strong id="csv-count">0</strong> (сумісно з <code>ml_trainer/train_classifier.py --csv</code>)
+            </div>
+          </div>
+
+          <div tabindex="0" role="region" aria-labelledby="ml-table-caption" class="table-wrapper">
+            <table>
+              <caption id="ml-table-caption">
+                10 нормалізованих ознак нейромережі MLP (10 → 16 → 12 → 4) та ймовірності Softmax у реальному часі
+              </caption>
+              <thead>
+                <tr>
+                  <th>Колесо</th>
+                  <th>f0 logRMS</th>
+                  <th>f1 Peer</th>
+                  <th>f2 Axle</th>
+                  <th>f3 Crest</th>
+                  <th>f4 Kurt</th>
+                  <th>f5 Low</th>
+                  <th>f6 Mid</th>
+                  <th>f7 High</th>
+                  <th>f8 Cent</th>
+                  <th>f9 Ton</th>
+                  <th>Softmax [N / B / P / F]</th>
+                  <th>Вердикт</th>
+                </tr>
+              </thead>
+              <tbody id="ml-table-body">
+                <tr>
+                  <td colspan="13" class="muted">Немає активних коліс для аналізу.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Panel 3: Threshold Tuning, Hardware Debug & Console -->
+      <div role="tabpanel" id="panel-debug" aria-labelledby="tab-debug" hidden="until-found">
+        <div class="panel-inner">
+          <div class="debug-grid">
+            <!-- Thresholds Form -->
+            <form id="config-form" class="debug-card">
+              <h3>Налаштування порогів класифікатора (Live)</h3>
+              <div class="form-grid">
+                <label>Peer Ratio (рівна дорога)
+                  <input type="number" step="0.05" min="1.0" max="5.0" name="faultPeerRatioMin" />
+                </label>
+                <label>Peer Ratio (бруківка)
+                  <input type="number" step="0.05" min="1.1" max="6.0" name="faultOnBadRoadPeerRatioMin" />
+                </label>
+                <label>Підтвердження тривоги (мс)
+                  <input type="number" step="100" min="500" max="15000" name="faultConfirmDurationMs" />
+                </label>
+                <label>Тихе попередження (мс)
+                  <input type="number" step="100" min="200" max="10000" name="warningDelayMs" />
+                </label>
+                <label>Поріг стоянки RMS (мВ)
+                  <input type="number" step="0.5" min="1.0" max="30.0" name="standstillRmsMv" />
+                </label>
+                <label>Перегрів SHT40 абс. (°C)
+                  <input type="number" step="1" min="40" max="140" name="tempOverheatAbsC" />
+                </label>
+                <label>Перегрів ΔT над медіаною (°C)
+                  <input type="number" step="1" min="5" max="60" name="tempDeltaOverPeerC" />
+                </label>
+                <label>Таймаут вузла OFFLINE (мс)
+                  <input type="number" step="100" min="500" max="10000" name="nodeTimeoutMs" />
+                </label>
+                <label>Vref MCP6002 Мін (мВ)
+                  <input type="number" step="10" min="1000" max="1600" name="vrefMinMv" />
+                </label>
+                <label>Vref MCP6002 Макс (мВ)
+                  <input type="number" step="10" min="1700" max="2400" name="vrefMaxMv" />
+                </label>
+              </div>
+              <div class="inline-row" style="margin-top: 12px;">
+                <button type="submit" class="btn btn-primary btn-sm">Застосувати пороги</button>
+              </div>
+            </form>
+
+            <!-- Baselines & ESP Node Controls -->
+            <div class="debug-card">
+              <h3>Управління вузлом ESP32-C3 та Базові рівні</h3>
+              <form id="baselines-form" class="form-grid" style="margin-bottom: 14px;">
+                <label>Baseline FL (мВ) <input type="number" step="0.5" min="5" max="500" name="base0" /></label>
+                <label>Baseline FR (мВ) <input type="number" step="0.5" min="5" max="500" name="base1" /></label>
+                <label>Baseline RL (мВ) <input type="number" step="0.5" min="5" max="500" name="base2" /></label>
+                <label>Baseline RR (мВ) <input type="number" step="0.5" min="5" max="500" name="base3" /></label>
+                <div class="full-span">
+                  <button type="submit" class="btn btn-secondary btn-sm">Оновити Baseline вручну</button>
+                </div>
+              </form>
+
+              <div class="esp-remote-box">
+                <div class="inline-row" style="margin-bottom: 8px;">
+                  <label for="esp-target-port">Цільовий USB-порт для команд:</label>
+                  <select id="esp-target-port">
+                    <option value="all">Обидва порти (Порт 1 + Порт 2)</option>
+                    <option value="0">Тільки USB Порт 1</option>
+                    <option value="1">Тільки USB Порт 2</option>
+                  </select>
+                </div>
+                <div class="inline-row">
+                  <label for="esp-wheel-assign">Змінити ID підключеної плати (NVS):</label>
+                  <select id="esp-wheel-assign">
+                    <option value="0">0 — FL</option>
+                    <option value="1">1 — FR</option>
+                    <option value="2">2 — RL</option>
+                    <option value="3">3 — RR</option>
+                  </select>
+                  <button type="button" id="btn-set-esp-wheel" class="btn btn-secondary btn-sm">Записати в ESP</button>
+                </div>
+
+                <form id="wifi-provision-form" class="inline-row" style="margin-top: 10px;">
+                  <input id="wifi-ssid" type="text" placeholder="Wi-Fi SSID" />
+                  <input id="wifi-pass" type="password" placeholder="Пароль" />
+                  <input id="wifi-url" type="text" placeholder="http://PC_IP:5050/api/telemetry" />
+                  <button type="submit" class="btn btn-secondary btn-sm">Надіслати Wi-Fi в ESP</button>
+                </form>
+              </div>
+            </div>
+
+            <!-- Pinout Reference -->
+            <div class="debug-card">
+              <h3>Актуальна розпіновка ESP32-C3 SuperMini (PCB)</h3>
+              <ul class="pinout-list">
+                <li><strong>GPIO2 (ADC1_CH2):</strong> вихід підсилювача MCP6002 (R5/C4), у спокої <code>~1650 мВ</code></li>
+                <li><strong>GPIO8 (SDA) / GPIO9 (SCL):</strong> датчик температури і вологості <code>GY-SHT40</code> (роз'єм J3, <code>0x44</code>)</li>
+                <li><strong>Увага по GPIO8:</strong> синій світлодіод на платі SuperMini висить на GPIO8 — у прошивці блимання вимкнене при <code>ENABLE_SHT40=1</code></li>
+                <li><strong>GPIO21 (TX) / GPIO20 (RX):</strong> CAN-шина <code>SN65HVD230</code> (500 kbps)</li>
+              </ul>
+            </div>
+
+            <!-- Serial & Telemetry Console -->
+            <div class="debug-card">
+              <h3>Консоль команд та останні пакети</h3>
+              <form id="raw-cmd-form" class="inline-row" style="margin-bottom: 8px;">
+                <input id="raw-cmd-input" type="text" placeholder="Команда ESP: status | cal | reset | json | human | rate 120" />
+                <button type="submit" class="btn btn-secondary btn-sm">Надіслати</button>
+              </form>
+              <pre id="raw-console" class="console-box">Очікування подій...</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
