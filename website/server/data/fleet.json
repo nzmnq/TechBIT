@@ -1,0 +1,206 @@
+{
+  "organization": {
+    "id": "ORG_UA_01",
+    "name": "ТОВ Агро-Логістика Захід (Design Partner)",
+    "plan": "design-partner-6m",
+    "locale": "uk"
+  },
+  "tractors": [
+    {
+      "id": "TR_001",
+      "org_id": "ORG_UA_01",
+      "plate_number": "DAF XF AA1234BB",
+      "s3_device_id": "S3_A1B2C3",
+      "attached_trailer_id": "TL_042",
+      "online": true,
+      "last_seen_utc": "2026-11-23T17:45:00Z",
+      "firmware_version": "2.0.0-mvp",
+      "config_version": 3,
+      "thresholds_config": {
+        "temp_warn_c": 70.0,
+        "temp_crit_c": 95.0,
+        "axle_temp_delta_warn_c": 18.0,
+        "axle_temp_delta_crit_c": 35.0,
+        "vib_warn_ratio": 2.2,
+        "vib_crit_ratio": 4.0,
+        "yellow_confirm_sec": 60,
+        "shadow_mode_enabled": true
+      }
+    },
+    {
+      "id": "TR_002",
+      "org_id": "ORG_UA_01",
+      "plate_number": "MAN TGX BC8812EA",
+      "s3_device_id": "S3_D4E5F6",
+      "attached_trailer_id": "TL_079",
+      "online": true,
+      "last_seen_utc": "2026-11-23T17:43:10Z",
+      "firmware_version": "2.0.0-mvp",
+      "config_version": 2,
+      "thresholds_config": {
+        "temp_warn_c": 70.0,
+        "temp_crit_c": 95.0,
+        "axle_temp_delta_warn_c": 18.0,
+        "axle_temp_delta_crit_c": 35.0,
+        "vib_warn_ratio": 2.2,
+        "vib_crit_ratio": 4.0,
+        "yellow_confirm_sec": 60,
+        "shadow_mode_enabled": false
+      }
+    }
+  ],
+  "trailers": [
+    {
+      "id": "TL_042",
+      "org_id": "ORG_UA_01",
+      "plate_number": "Schmitz Cargobull AA5678XX",
+      "bridge_device_id": "BR_042",
+      "esp_now_rssi": -54,
+      "status": "online"
+    },
+    {
+      "id": "TL_079",
+      "org_id": "ORG_UA_01",
+      "plate_number": "Krone Profi Liner BC4410XT",
+      "bridge_device_id": "BR_079",
+      "esp_now_rssi": -61,
+      "status": "online"
+    }
+  ],
+  "sensor_nodes": [
+    {
+      "node_id": "C3_110011",
+      "asset_type": "tractor",
+      "asset_id": "TR_001",
+      "axle_num": 1,
+      "code_l": "T1-L",
+      "code_r": "T1-R",
+      "temp_l_c": 31.2,
+      "temp_r_c": 32.0,
+      "vib_rms_l": 1.12,
+      "vib_rms_r": 1.09,
+      "status": "active",
+      "updated_at_utc": "2026-11-23T17:45:00Z"
+    },
+    {
+      "node_id": "C3_110012",
+      "asset_type": "tractor",
+      "asset_id": "TR_001",
+      "axle_num": 2,
+      "code_l": "T2-L",
+      "code_r": "T2-R",
+      "temp_l_c": 34.8,
+      "temp_r_c": 35.4,
+      "vib_rms_l": 1.24,
+      "vib_rms_r": 1.21,
+      "status": "active",
+      "updated_at_utc": "2026-11-23T17:45:00Z"
+    },
+    {
+      "node_id": "C3_998876",
+      "asset_type": "trailer",
+      "asset_id": "TL_042",
+      "axle_num": 1,
+      "code_l": "P1-L",
+      "code_r": "P1-R",
+      "temp_l_c": 33.4,
+      "temp_r_c": 34.1,
+      "vib_rms_l": 1.15,
+      "vib_rms_r": 1.18,
+      "status": "active",
+      "updated_at_utc": "2026-11-23T17:45:00Z"
+    },
+    {
+      "node_id": "C3_998877",
+      "asset_type": "trailer",
+      "asset_id": "TL_042",
+      "axle_num": 2,
+      "code_l": "P2-L",
+      "code_r": "P2-R",
+      "temp_l_c": 78.4,
+      "temp_r_c": 34.1,
+      "vib_rms_l": 4.12,
+      "vib_rms_r": 1.05,
+      "status": "active",
+      "updated_at_utc": "2026-11-23T17:45:00Z"
+    },
+    {
+      "node_id": "C3_998878",
+      "asset_type": "trailer",
+      "asset_id": "TL_042",
+      "axle_num": 3,
+      "code_l": "P3-L",
+      "code_r": "P3-R",
+      "temp_l_c": 35.0,
+      "temp_r_c": 34.6,
+      "vib_rms_l": 1.22,
+      "vib_rms_r": 1.19,
+      "status": "active",
+      "updated_at_utc": "2026-11-23T17:45:00Z"
+    }
+  ],
+  "anomaly_events": [
+    {
+      "event_id": "550e8400-e29b-41d4-a716-446655440000",
+      "created_at_utc": "2026-11-23T17:45:00Z",
+      "device_id": "S3_A1B2C3",
+      "node_id": "C3_998877",
+      "wheel_code": "P2-L",
+      "tractor_id": "TR_001",
+      "trailer_id": "TL_042",
+      "severity": "YELLOW",
+      "trigger_reason": "TEMP_DELTA_HIGH",
+      "temp_c": 78.4,
+      "peer_temp_delta_c": 44.3,
+      "vib_rms": 4.12,
+      "vib_peak": 12.5,
+      "raw_burst_s3_key": "bursts/2026-11-23/550e8400.bin.gz",
+      "firmware_version": "2.0.0-mvp",
+      "config_version": 3
+    },
+    {
+      "event_id": "9a1f2200-1122-4c88-9001-334455667788",
+      "created_at_utc": "2026-11-21T11:20:00Z",
+      "device_id": "S3_D4E5F6",
+      "node_id": "C3_220022",
+      "wheel_code": "T2-R",
+      "tractor_id": "TR_002",
+      "trailer_id": "TL_079",
+      "severity": "RED",
+      "trigger_reason": "BRAKE_DRAG_OVERHEAT",
+      "temp_c": 108.6,
+      "peer_temp_delta_c": 69.2,
+      "vib_rms": 6.45,
+      "vib_peak": 18.9,
+      "raw_burst_s3_key": "bursts/2026-11-21/9a1f2200.bin.gz",
+      "firmware_version": "2.0.0-mvp",
+      "config_version": 2
+    }
+  ],
+  "incident_tickets": [
+    {
+      "ticket_id": "TKT-2026-014",
+      "event_id": "550e8400-e29b-41d4-a716-446655440000",
+      "tractor_plate": "DAF AA1234BB",
+      "trailer_plate": "AA5678XX",
+      "wheel_label": "Причеп, Вісь 2, Ліве колесо (P2-L)",
+      "status": "OPEN",
+      "resolution_code": null,
+      "mechanic_comment": "",
+      "resolved_by": null,
+      "resolved_at_utc": null
+    },
+    {
+      "ticket_id": "TKT-2026-011",
+      "event_id": "9a1f2200-1122-4c88-9001-334455667788",
+      "tractor_plate": "MAN BC8812EA",
+      "trailer_plate": "BC4410XT",
+      "wheel_label": "Тягач, Вісь 2, Праве колесо (T2-R)",
+      "status": "CLOSED",
+      "resolution_code": "BRAKE_STUCK",
+      "mechanic_comment": "Заклинив напрямний палець супорта, замінили ремкомплект на базі без втрати рейсу.",
+      "resolved_by": "tg_mech_stepan",
+      "resolved_at_utc": "2026-11-21T16:05:00Z"
+    }
+  ]
+}

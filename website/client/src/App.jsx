@@ -4,6 +4,7 @@ import Footer from './components/Footer';
 import OrderModal from './components/OrderModal';
 import HomePage from './pages/HomePage';
 import CatalogPage from './pages/CatalogPage';
+import AdminPage from './pages/AdminPage';
 import AboutPage from './pages/AboutPage';
 
 function App() {
@@ -11,13 +12,14 @@ function App() {
   const [catalogCategory, setCatalogCategory] = useState('all');
   const [cartItems, setCartItems] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [locale, setLocale] = useState('uk');
 
-  function handleAddToCart(product) {
+  function handleAddToCart(product, qty = 1) {
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id ? { ...item, quantity: item.quantity + qty } : item
         );
       }
       return [
@@ -27,7 +29,9 @@ function App() {
           sku: product.sku,
           name: product.name,
           price: product.price,
-          quantity: 1
+          priceUsd: product.priceUsd || 0,
+          subscriptionMonthlyUah: product.subscriptionMonthlyUah || 0,
+          quantity: qty
         }
       ];
     });
@@ -40,9 +44,7 @@ function App() {
       return;
     }
     setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === productId ? { ...item, quantity: Math.min(50, newQuantity) } : item
-      )
+      prev.map((item) => (item.id === productId ? { ...item, quantity: newQuantity } : item))
     );
   }
 
@@ -54,36 +56,36 @@ function App() {
     setCartItems([]);
   }
 
-  const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="app-layout">
       <Navbar
         activePage={activePage}
-        onNavigate={(page) => setActivePage(page)}
-        cartCount={totalCartCount}
+        onNavigate={setActivePage}
+        cartCount={totalCount}
         onOpenCart={() => setIsCartOpen(true)}
+        locale={locale}
+        onToggleLocale={() => setLocale((prev) => (prev === 'uk' ? 'en' : 'uk'))}
       />
 
       <main className="main-content">
         <div className="container">
           {activePage === 'home' && (
             <HomePage
-              onNavigate={(page) => setActivePage(page)}
-              onSelectCategory={(cat) => setCatalogCategory(cat)}
+              onNavigate={setActivePage}
+              onSelectCategory={setCatalogCategory}
+              onAddPackage={handleAddToCart}
             />
           )}
 
           {activePage === 'catalog' && (
-            <CatalogPage
-              initialCategory={catalogCategory}
-              onAddToCart={handleAddToCart}
-            />
+            <CatalogPage initialCategory={catalogCategory} onAddToCart={handleAddToCart} />
           )}
 
-          {activePage === 'about' && (
-            <AboutPage onNavigate={(page) => setActivePage(page)} />
-          )}
+          {activePage === 'admin' && <AdminPage locale={locale} />}
+
+          {activePage === 'about' && <AboutPage onNavigate={setActivePage} />}
         </div>
       </main>
 
