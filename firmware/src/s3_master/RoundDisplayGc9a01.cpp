@@ -246,8 +246,8 @@ bool RoundDisplayGc9a01::begin() {
     }
 
     spi_->begin(PIN_TFT_SCK, -1, PIN_TFT_MOSI, -1);
-    // On ESP32-S3 FSPI, passing miso=-1 defaults MISO to GPIO13 (same pin as PIN_TFT_SCK)
-    // and flips it to INPUT; detach MISO and restore SCK output routing cleanly.
+    // On ESP32-S3 FSPI, passing miso=-1 defaults MISO to GPIO13; detach it cleanly since GC9A01 is write-only,
+    // and ensure SCK output routing remains attached to PIN_TFT_SCK.
     if (spi_->bus()) {
         spiDetachMISO(spi_->bus(), 13);
         spiAttachSCK(spi_->bus(), PIN_TFT_SCK);

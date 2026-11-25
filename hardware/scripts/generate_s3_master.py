@@ -76,7 +76,7 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
     # Tuple format: (text, x, y, rot, size, justify)
     top_silk_labels = [
         # Board Title
-        ("TechBIT S3 MASTER HUB", 11.5, 9.0, 0, 0.90, ""),
+        ("TechBIT S3 MASTER HUB", 11.5, 8.5, 0, 0.90, ""),
         # J1: Vehicle 12V + CAN (wire entry UP)
         ("J1 CAR/CAN", 55.62, 1.8, 0, 0.85, ""),
         ("CANH", 48.00, 3.8, 0, 0.80, ""),
@@ -95,34 +95,38 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
         ("JP1", 42.00, 11.8, 0, 0.80, ""),
         ("120R", 42.00, 19.8, 0, 0.80, ""),
         # MOD1: MP1584EN 12V/24V -> 5V Buck (22.1 x 16.8 mm, 8 pins)
-        ("IN+ 12V", 6.86, 18.2, 0, 0.80, ""),
-        ("IN- GND", 17.53, 18.2, 0, 0.80, ""),
-        ("MOD1 MP1584EN", 12.20, 29.00, 0, 0.80, ""),
-        ("DC-DC 5V 3A", 12.20, 31.60, 0, 0.80, ""),
-        ("OUT+ 5V", 6.86, 42.2, 0, 0.80, ""),
-        ("OUT- GND", 17.53, 42.2, 0, 0.80, ""),
+        ("IN+ 12V", 6.86, 15.7, 0, 0.80, ""),
+        ("IN- GND", 17.53, 15.7, 0, 0.80, ""),
+        ("MOD1 MP1584EN", 12.20, 26.50, 0, 0.80, ""),
+        ("DC-DC 5V 3A", 12.20, 29.10, 0, 0.80, ""),
+        ("OUT+ 5V", 6.86, 39.7, 0, 0.80, ""),
+        ("OUT- GND", 17.53, 39.7, 0, 0.80, ""),
         # C2: 10uF 3.3V decoupling
-        ("+", 21.80, 48.0, 0, 0.90, ""),
-        ("C2 10uF", 18.25, 51.9, 0, 0.80, ""),
+        ("+", 24.90, 42.50, 0, 0.90, ""),
+        ("C2 10uF", 21.75, 46.30, 0, 0.80, ""),
         # C1: 100uF 5V bulk
         ("+", 16.00, 84.9, 0, 0.90, ""),
         ("C1 100uF", 16.00, 93.3, 0, 0.80, ""),
-        # J2: 1.28" Red GC9A01 TFT SPI Display (8-pin)
-        ("J2 TFT_GC9A01", 10.80, 61.5, 0, 0.85, "left"),
-        ("3V3", 10.80, 64.48, 0, 0.80, "left"),
-        ("GND", 10.80, 67.02, 0, 0.80, "left"),
-        ("CS", 10.80, 69.56, 0, 0.80, "left"),
-        ("RES", 10.80, 72.10, 0, 0.80, "left"),
-        ("A0/DC", 10.80, 74.64, 0, 0.80, "left"),
-        ("SDA", 10.80, 77.18, 0, 0.80, "left"),
-        ("SCK", 10.80, 79.72, 0, 0.80, "left"),
-        ("LED", 10.80, 82.26, 0, 0.80, "left"),
-        # J3: MicroSD SPI Slot on 1.28" Red Module (4-pin)
-        ("J3 MICRO_SD", 61.50, 43.0, 0, 0.85, ""),
-        ("SD_CS", 63.80, 46.70, 0, 0.80, "left"),
-        ("MOSI", 63.80, 49.24, 0, 0.80, "left"),
-        ("MISO", 63.80, 51.78, 0, 0.80, "left"),
-        ("SCK", 63.80, 54.32, 0, 0.80, "left"),
+        # J2A: JST-XH 4P TFT Pins 1..4 (side-entry LEFT)
+        ("J2A TFT 1-4", 1.20, 42.40, 0, 0.80, "left"),
+        ("3V3", 11.20, 46.00, 0, 0.80, "left"),
+        ("GND", 11.20, 48.50, 0, 0.80, "left"),
+        ("CS", 11.20, 51.00, 0, 0.80, "left"),
+        ("RES", 11.20, 53.50, 0, 0.80, "left"),
+        # J2B: JST-XH 4P TFT Pins 5..8 (side-entry LEFT)
+        ("J2B", 17.40, 62.50, 0, 0.80, "left"),
+        ("TFT 5-8", 17.40, 65.00, 0, 0.80, "left"),
+        ("A0/DC", 11.20, 60.00, 0, 0.80, "left"),
+        ("SDA", 11.20, 62.50, 0, 0.80, "left"),
+        ("SCK", 11.20, 65.00, 0, 0.80, "left"),
+        ("LED", 11.20, 67.50, 0, 0.80, "left"),
+        # J3: JST-XH 4P MicroSD Slot Pins 1..4 (side-entry LEFT)
+        ("J3", 17.40, 76.50, 0, 0.80, "left"),
+        ("MICRO_SD", 17.40, 79.00, 0, 0.80, "left"),
+        ("SD_CS", 11.20, 74.00, 0, 0.80, "left"),
+        ("MOSI", 11.20, 76.50, 0, 0.80, "left"),
+        ("MISO", 11.20, 79.00, 0, 0.80, "left"),
+        ("SCK", 11.20, 81.50, 0, 0.80, "left"),
         # U1: ESP32-S3-DevKitC-1 N16R8 center annotations & active pin callouts
         ("WIFI ANTENNA UP", 40.20, 27.5, 0, 0.85, ""),
         ("U1 ESP32-S3", 40.20, 57.5, 0, 1.05, ""),
@@ -133,20 +137,20 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
         ("3V3", 30.00, 36.54, 0, 0.80, "left"),
         ("TX4", 30.00, 41.62, 0, 0.80, "left"),
         ("RX5", 30.00, 44.16, 0, 0.80, "left"),
-        ("CS9", 30.00, 69.56, 0, 0.80, "left"),
-        ("RS10", 30.00, 72.10, 0, 0.80, "left"),
-        ("DC11", 30.00, 74.64, 0, 0.80, "left"),
-        ("MO12", 30.00, 77.18, 0, 0.80, "left"),
-        ("CK13", 30.00, 79.72, 0, 0.80, "left"),
-        ("BL14", 30.00, 82.26, 0, 0.80, "left"),
+        ("CS6", 30.00, 46.70, 0, 0.80, "left"),
+        ("RS7", 30.00, 49.24, 0, 0.80, "left"),
+        ("DC15", 30.00, 51.78, 0, 0.80, "left"),
+        ("MO16", 30.00, 54.32, 0, 0.80, "left"),
+        ("CK17", 30.00, 56.86, 0, 0.80, "left"),
+        ("BL18", 30.00, 59.40, 0, 0.80, "left"),
+        ("SD9", 30.00, 69.56, 0, 0.80, "left"),
+        ("MO10", 30.00, 72.10, 0, 0.80, "left"),
+        ("MI11", 30.00, 74.64, 0, 0.80, "left"),
+        ("CK12", 30.00, 77.18, 0, 0.80, "left"),
         ("5V", 30.00, 84.80, 0, 0.80, "left"),
         ("GND", 30.00, 87.34, 0, 0.80, "left"),
         # U1 Right header active pin callouts (x=50.4 right-justified)
         ("GND", 50.40, 34.00, 0, 0.80, "right"),
-        ("CS42", 50.40, 46.70, 0, 0.80, "right"),
-        ("MO41", 50.40, 49.24, 0, 0.80, "right"),
-        ("MI40", 50.40, 51.78, 0, 0.80, "right"),
-        ("CK39", 50.40, 54.32, 0, 0.80, "right"),
         ("GND", 50.40, 84.80, 0, 0.80, "right"),
         ("GND", 50.40, 87.34, 0, 0.80, "right"),
     ]
@@ -161,7 +165,7 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
     # Bottom Silkscreen (B.SilkS) mirrored labels for SMD components (kept strictly off copper pads/traces)
     bot_silk_labels = [
         ("R1 120R", 46.50, 20.80, 0, 0.80),
-        ("C3 100nF", 15.50, 57.50, 0, 0.80),
+        ("C3 100nF", 9.15, 42.75, 0, 0.80),
     ]
     for ltxt, tx, ty, lrot, sz in bot_silk_labels:
         lines.append(
@@ -178,13 +182,13 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
         # JP1 1x02 jumper shroud outline
         (40.70, 13.20, 43.30, 18.34),
         # MOD1 MP1584EN inner body box between IN/OUT pads
-        (4.80, 23.00, 19.60, 37.50),
+        (4.80, 20.50, 19.60, 35.00),
         # U1 ESP32-S3-DevKitC-1 inner body box between L/R pin columns
         (29.10, 24.00, 51.30, 92.20),
-        # J2 1x08 TFT header outline
-        (7.10, 63.00, 9.90, 83.74),
-        # J3 1x04 MicroSD header outline
-        (60.10, 45.20, 62.90, 55.80),
+        # J2A / J2B / J3 side-entry JST-XH 4P shroud outlines (left of pads)
+        (0.20, 43.55, 7.00, 55.95),
+        (0.20, 57.55, 7.00, 69.95),
+        (0.20, 71.55, 7.00, 83.95),
     ]
     for x1, y1, x2, y2 in silk_boxes:
         lines.append(
@@ -235,31 +239,31 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
             lines.append("    )")
         lines.append("  )")
 
-    # 1. U1: ESP32-S3-DevKitC-1 N16R8 (2x22 2.54mm, 25.40mm spacing, Wi-Fi UP, Dual USB-C DOWN)
+    # 1. U1: ESP32-S3-DevKitC-1 N16R8 (2x22 2.54mm PinSockets, Wi-Fi UP, Dual USB-C DOWN)
     left_nets = [
         "+3V3",      # L1: 3V3
         "+3V3",      # L2: 3V3
         "",          # L3: RST
         "CAN_TX",    # L4: GPIO4
         "CAN_RX",    # L5: GPIO5
-        "", "", "", "", "", "", "", "", "",  # L6..L14: GPIO6,7,15,16,17,18,8,3,46
-        "TFT_CS",    # L15: GPIO9
-        "TFT_RES",   # L16: GPIO10
-        "TFT_DC",    # L17: GPIO11
-        "TFT_MOSI",  # L18: GPIO12
-        "TFT_SCK",   # L19: GPIO13
-        "TFT_LED",   # L20: GPIO14
+        "TFT_CS",    # L6: GPIO6
+        "TFT_RES",   # L7: GPIO7
+        "TFT_DC",    # L8: GPIO15
+        "TFT_MOSI",  # L9: GPIO16
+        "TFT_SCK",   # L10: GPIO17
+        "TFT_LED",   # L11: GPIO18
+        "", "", "",  # L12..L14: GPIO8, GPIO3, GPIO46
+        "SD_CS",     # L15: GPIO9
+        "SD_MOSI",   # L16: GPIO10
+        "SD_MISO",   # L17: GPIO11
+        "SD_SCK",    # L18: GPIO12
+        "", "",      # L19..L20: GPIO13, GPIO14
         "+5V_BUCK",  # L21: 5V
         "GND",       # L22: GND
     ]
     right_nets = [
         "GND",       # R1: GND
-        "", "", "", "",  # R2..R5: TX/43, RX/44, GPIO1, GPIO2
-        "SD_CS",     # R6: GPIO42
-        "SD_MOSI",   # R7: GPIO41
-        "SD_MISO",   # R8: GPIO40
-        "SD_SCK",    # R9: GPIO39
-        "", "", "", "", "", "", "", "", "", "", "",  # R10..R20: GPIO38,37,36,35,0,45,48,47,21,20,19
+        "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",  # R2..R20
         "GND",       # R21: GND
         "GND",       # R22: GND
     ]
@@ -299,7 +303,7 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
     # 3. MOD1: MP1584EN DC-DC Buck Converter (D-SUN 22.1 x 16.8 mm, 8 holes, 4.5-28V -> 5.0V 3A)
     add_fp(
         "Module:MP1584EN_Buck",
-        "MOD1", "MP1584EN_5V", "F.Cu", 18.80, 21.00, 270,
+        "MOD1", "MP1584EN_5V", "F.Cu", 18.80, 18.50, 270,
         [
             ("1a", "thru_hole", "roundrect", 0.000, 0.000, 2.0, 2.0, 1.0, "GND"),
             ("1b", "thru_hole", "circle", 0.000, 2.540, 2.0, 2.0, 1.0, "GND"),
@@ -368,39 +372,49 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
         ref_offset=(0, -2.5), val_offset=(0, 2.5),
     )
 
-    # 7. J2: TFT_GC9A01 (1x08 Vertical PinHeader) for 1.28" Red GC9A01 Display
+    # 7. J2A: JST-XH 4P (S4B-XH-A) Display Power & Control (1=3V3, 2=GND, 3=CS, 4=RES)
     add_fp(
-        "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
-        "J2", "TFT_GC9A01", "F.Cu", 8.50, 64.48, 0,
+        "Connector_JST:JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal",
+        "J2A", "TFT_1_4", "F.Cu", 8.80, 46.00, 270,
         [
-            ("1", "thru_hole", "roundrect", 0.0, 0.0, 1.9, 1.9, 0.9, "+3V3"),
-            ("2", "thru_hole", "circle", 0.0, 2.54, 1.9, 1.9, 0.9, "GND"),
-            ("3", "thru_hole", "circle", 0.0, 5.08, 1.9, 1.9, 0.9, "TFT_CS"),
-            ("4", "thru_hole", "circle", 0.0, 7.62, 1.9, 1.9, 0.9, "TFT_RES"),
-            ("5", "thru_hole", "circle", 0.0, 10.16, 1.9, 1.9, 0.9, "TFT_DC"),
-            ("6", "thru_hole", "circle", 0.0, 12.70, 1.9, 1.9, 0.9, "TFT_MOSI"),
-            ("7", "thru_hole", "circle", 0.0, 15.24, 1.9, 1.9, 0.9, "TFT_SCK"),
-            ("8", "thru_hole", "circle", 0.0, 17.78, 1.9, 1.9, 0.9, "TFT_LED"),
+            ("1", "thru_hole", "roundrect", 0.0, 0.0, 1.85, 2.20, 0.95, "+3V3"),
+            ("2", "thru_hole", "oval", 2.5, 0.0, 1.85, 2.20, 0.95, "GND"),
+            ("3", "thru_hole", "oval", 5.0, 0.0, 1.85, 2.20, 0.95, "TFT_CS"),
+            ("4", "thru_hole", "oval", 7.5, 0.0, 1.85, 2.20, 0.95, "TFT_RES"),
         ],
-        [("${KICAD10_3DMODEL_DIR}/Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x08_P2.54mm_Vertical.step", (0, 0, 0), (0, 0, 0))],
-        ref_offset=(0, -3.0), val_offset=(0, 20.5),
+        [("${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal.step", (0, 0, 0), (0, 0, 0))],
+        ref_offset=(3.75, -3.2), val_offset=(3.75, 4.5),
     )
 
-    # 8. J3: MICRO_SD (1x04 Vertical PinHeader) for 1.28" Red Module MicroSD Slot
+    # 8. J2B: JST-XH 4P (S4B-XH-A) Display SPI & Backlight (1=DC/A0, 2=SDA/MOSI, 3=SCK, 4=LED)
     add_fp(
-        "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
-        "J3", "MICRO_SD", "F.Cu", 61.50, 46.70, 0,
+        "Connector_JST:JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal",
+        "J2B", "TFT_5_8", "F.Cu", 8.80, 60.00, 270,
         [
-            ("1", "thru_hole", "roundrect", 0.0, 0.0, 1.9, 1.9, 0.9, "SD_CS"),
-            ("2", "thru_hole", "circle", 0.0, 2.54, 1.9, 1.9, 0.9, "SD_MOSI"),
-            ("3", "thru_hole", "circle", 0.0, 5.08, 1.9, 1.9, 0.9, "SD_MISO"),
-            ("4", "thru_hole", "circle", 0.0, 7.62, 1.9, 1.9, 0.9, "SD_SCK"),
+            ("1", "thru_hole", "roundrect", 0.0, 0.0, 1.85, 2.20, 0.95, "TFT_DC"),
+            ("2", "thru_hole", "oval", 2.5, 0.0, 1.85, 2.20, 0.95, "TFT_MOSI"),
+            ("3", "thru_hole", "oval", 5.0, 0.0, 1.85, 2.20, 0.95, "TFT_SCK"),
+            ("4", "thru_hole", "oval", 7.5, 0.0, 1.85, 2.20, 0.95, "TFT_LED"),
         ],
-        [("${KICAD10_3DMODEL_DIR}/Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x04_P2.54mm_Vertical.step", (0, 0, 0), (0, 0, 0))],
-        ref_offset=(0, -3.0), val_offset=(0, 10.5),
+        [("${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal.step", (0, 0, 0), (0, 0, 0))],
+        ref_offset=(3.75, -3.2), val_offset=(3.75, 4.5),
     )
 
-    # 9. C1: 100uF Radial Electrolytic Cap on 5V rail
+    # 9. J3: JST-XH 4P (S4B-XH-A) MicroSD SPI Slot on 1.28" Display (1=SD_CS, 2=MOSI, 3=MISO, 4=SCK)
+    add_fp(
+        "Connector_JST:JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal",
+        "J3", "MICRO_SD", "F.Cu", 8.80, 74.00, 270,
+        [
+            ("1", "thru_hole", "roundrect", 0.0, 0.0, 1.85, 2.20, 0.95, "SD_CS"),
+            ("2", "thru_hole", "oval", 2.5, 0.0, 1.85, 2.20, 0.95, "SD_MOSI"),
+            ("3", "thru_hole", "oval", 5.0, 0.0, 1.85, 2.20, 0.95, "SD_MISO"),
+            ("4", "thru_hole", "oval", 7.5, 0.0, 1.85, 2.20, 0.95, "SD_SCK"),
+        ],
+        [("${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal.step", (0, 0, 0), (0, 0, 0))],
+        ref_offset=(3.75, -3.2), val_offset=(3.75, 4.5),
+    )
+
+    # 10. C1: 100uF Radial Electrolytic Cap on 5V rail
     add_fp(
         "Capacitor_THT:CP_Radial_D5.0mm_P2.50mm",
         "C1", "100uF", "F.Cu", 16.00, 87.50, 270,
@@ -412,10 +426,10 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
         ref_offset=(1.25, -3.5), val_offset=(1.25, 3.5),
     )
 
-    # 10. C2: 10uF Radial Electrolytic Cap on 3.3V rail (clear below MP1584EN)
+    # 11. C2: 10uF Radial Electrolytic Cap on 3.3V rail
     add_fp(
         "Capacitor_THT:CP_Radial_D5.0mm_P2.50mm",
-        "C2", "10uF", "F.Cu", 19.50, 48.00, 180,
+        "C2", "10uF", "F.Cu", 23.00, 42.50, 180,
         [
             ("1", "thru_hole", "roundrect", 0.0, 0.0, 2.1, 2.1, 0.9, "+3V3"),
             ("2", "thru_hole", "circle", 2.5, 0.0, 2.1, 2.1, 0.9, "GND"),
@@ -424,10 +438,11 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
         ref_offset=(1.25, -3.5), val_offset=(1.25, 3.5),
     )
 
-    # 11. C3: 100nF 1206 SMD Ceramic Decoupling Cap on B.Cu
+    # 12. C3: 100nF 1206 SMD Ceramic Decoupling Cap on B.Cu (near J2A +3V3/GND)
+    # Placed at (13.50, 42.75) rot 270 -> Pad 1 UP at (13.50, 41.275) GND, Pad 2 DOWN at (13.50, 44.225) +3V3
     add_fp(
         "Capacitor_SMD:C_1206_3216Metric",
-        "C3", "100nF", "B.Cu", 13.00, 60.50, 0,
+        "C3", "100nF", "B.Cu", 13.50, 42.75, 270,
         [
             ("1", "smd", "roundrect", -1.475, 0.0, 1.5, 1.8, 0, "GND"),
             ("2", "smd", "roundrect", 1.475, 0.0, 1.5, 1.8, 0, "+3V3"),
@@ -457,16 +472,29 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
     # --- 100% SINGLE-LAYER ROUTING ON B.Cu (zero vias, zero crossings, zero copper pour) ---
 
     # +12V_RAW (1.4 mm): J1.1 -> top edge -> left edge -> MOD1.2a -> MOD1.2b (IN+)
-    add_path([P("J1", 1), L(63.24, 3.00), L(3.00, 3.00), L(3.00, 21.00), P("MOD1", "2a"), P("MOD1", "2b")], "+12V_RAW", 1.4)
+    add_path([P("J1", 1), L(63.24, 3.00), L(2.60, 3.00), L(2.60, 18.50), P("MOD1", "2a"), P("MOD1", "2b")], "+12V_RAW", 1.4)
 
     # +5V_BUCK (1.2 mm): MOD1.4b -> MOD1.4a (OUT+) -> left edge -> C1.1 & U1.L21
-    add_path([P("MOD1", "4b"), P("MOD1", "4a"), L(3.00, 39.542), L(3.00, 84.80), L(16.00, 84.80), P("U1", "L21")], "+5V_BUCK", 1.2)
-    add_path([L(16.00, 84.80), P("C1", 1)], "+5V_BUCK", 1.2)
+    add_path(
+        [
+            P("MOD1", "4b"),
+            P("MOD1", "4a"),
+            L(2.60, 37.042),
+            L(2.60, 85.20),
+            L(16.00, 85.20),
+            L(22.00, 85.20),
+            L(22.00, 84.80),
+            P("U1", "L21"),
+        ],
+        "+5V_BUCK",
+        1.2,
+    )
+    add_path([L(16.00, 85.20), P("C1", 1)], "+5V_BUCK", 1.2)
 
-    # +3V3 (1.1 mm): J2.1 -> C3.2 -> C2.1 -> U1.L2 -> U1.L1 -> MOD2.1
-    add_path([P("J2", 1), L(14.475, 64.48), P("C3", 2)], "+3V3", 1.0)
-    add_path([P("C3", 2), L(19.50, 60.50), P("C2", 1), L(22.00, 48.00), L(22.00, 36.54), P("U1", "L2"), P("U1", "L1")], "+3V3", 1.1)
-    add_path([P("U1", "L1"), L(24.50, 34.00), P("MOD2", 1)], "+3V3", 1.1)
+    # +3V3 (1.0-1.1 mm): MOD2.1 -> U1.L1 -> U1.L2 -> C2.1 -> (clear around C2.2) -> C3.2 -> J2A.1
+    add_path([P("MOD2", 1), L(24.50, 34.00), P("U1", "L1"), P("U1", "L2")], "+3V3", 1.1)
+    add_path([P("U1", "L2"), L(23.00, 36.54), P("C2", 1), L(23.00, 45.00), L(19.00, 45.00), L(18.00, 44.225), P("C3", 2)], "+3V3", 1.0)
+    add_path([P("C3", 2), L(11.50, 44.225), L(11.50, 46.00), P("J2A", 1)], "+3V3", 1.0)
 
     # CAN_TX & CAN_RX (0.9 mm): MOD2 -> U1.L4 / U1.L5
     add_path([P("MOD2", 3), L(29.58, 19.00), L(30.50, 19.92), L(30.50, 41.62), P("U1", "L4")], "CAN_TX", 0.9)
@@ -482,30 +510,24 @@ def make_board_elements(ox, oy, ref_suffix="", net_offset=0, net_suffix=""):
     add_path([P("MOD2", 5), L(34.66, 18.00), L(36.00, 19.34), L(36.00, 25.00), L(53.08, 25.00), P("J1", 3)], "CAN_L", 1.0)
     add_path([L(42.00, 25.00), P("R1", 2)], "CAN_L", 1.0)
 
-    # TFT_GC9A01 SPI bus (0.9 mm): J2.3..J2.8 straight horizontal to U1.L15..U1.L20
-    for j_pin, u_pin, net_name in [
-        (3, "L15", "TFT_CS"),
-        (4, "L16", "TFT_RES"),
-        (5, "L17", "TFT_DC"),
-        (6, "L18", "TFT_MOSI"),
-        (7, "L19", "TFT_SCK"),
-        (8, "L20", "TFT_LED"),
-    ]:
-        add_path([P("J2", j_pin), P("U1", u_pin)], net_name, 0.9)
+    # TFT_GC9A01 SPI bus (0.85 mm): J2A.3..4 + J2B.1..4 -> U1.L6..L11
+    add_path([P("J2A", 3), L(15.00, 51.00), L(19.30, 46.70), P("U1", "L6")], "TFT_CS", 0.85)
+    add_path([P("J2A", 4), L(15.80, 53.50), L(20.06, 49.24), P("U1", "L7")], "TFT_RES", 0.85)
+    add_path([P("J2B", 1), L(12.00, 60.00), L(20.22, 51.78), P("U1", "L8")], "TFT_DC", 0.85)
+    add_path([P("J2B", 2), L(12.70, 62.50), L(20.88, 54.32), P("U1", "L9")], "TFT_MOSI", 0.85)
+    add_path([P("J2B", 3), L(13.40, 65.00), L(21.54, 56.86), P("U1", "L10")], "TFT_SCK", 0.85)
+    add_path([P("J2B", 4), L(14.10, 67.50), L(22.20, 59.40), P("U1", "L11")], "TFT_LED", 0.85)
 
-    # MICRO_SD SPI bus (0.9 mm): U1.R6..U1.R9 straight horizontal to J3.1..J3.4
-    for u_pin, j_pin, net_name in [
-        ("R6", 1, "SD_CS"),
-        ("R7", 2, "SD_MOSI"),
-        ("R8", 3, "SD_MISO"),
-        ("R9", 4, "SD_SCK"),
-    ]:
-        add_path([P("U1", u_pin), P("J3", j_pin)], net_name, 0.9)
+    # MICRO_SD SPI bus (0.85 mm): J3.1..4 -> U1.L15..L18
+    add_path([P("J3", 1), L(15.00, 74.00), L(19.44, 69.56), P("U1", "L15")], "SD_CS", 0.85)
+    add_path([P("J3", 2), L(15.70, 76.50), L(20.10, 72.10), P("U1", "L16")], "SD_MOSI", 0.85)
+    add_path([P("J3", 3), L(16.40, 79.00), L(20.76, 74.64), P("U1", "L17")], "SD_MISO", 0.85)
+    add_path([P("J3", 4), L(17.10, 81.50), L(21.42, 77.18), P("U1", "L18")], "SD_SCK", 0.85)
 
     # GND network (1.0..1.4 mm): planar tree connecting all 16 GND pads without crossing
-    add_path([P("J2", 2), L(5.80, 67.02), L(5.80, 60.50), P("C3", 1)], "GND", 1.0)
-    add_path([P("C3", 1), L(11.525, 51.50), L(17.00, 51.50), P("C2", 2)], "GND", 1.1)
-    add_path([P("C2", 2), L(17.00, 43.00), L(16.260, 43.00), P("MOD1", "3b"), P("MOD1", "3a"), P("MOD1", "1a"), P("MOD1", "1b")], "GND", 1.2)
+    add_path([P("J2A", 2), L(5.40, 48.50), L(5.40, 41.275), P("C3", 1), L(16.260, 41.275), P("MOD1", "3b")], "GND", 1.0)
+    add_path([P("C2", 2), L(20.50, 40.50), L(16.260, 40.50), P("MOD1", "3b")], "GND", 1.1)
+    add_path([P("MOD1", "3b"), P("MOD1", "3a"), P("MOD1", "1a"), P("MOD1", "1b")], "GND", 1.2)
     add_path([P("MOD1", "1b"), L(16.260, 6.00), L(27.04, 6.00), P("MOD2", 2)], "GND", 1.2)
     add_path([L(27.04, 6.00), L(58.16, 6.00), P("J1", 2)], "GND", 1.3)
     add_path([P("J1", 2), L(58.16, 15.00), L(58.16, 28.00), L(52.90, 28.00), P("U1", "R1")], "GND", 1.2)
@@ -636,21 +658,23 @@ def main():
         "TOP SIDE (F.Cu - THT & Modules):\\n"
         "- U1: ESP32-S3-DevKitC-1 N16R8 (2x22 2.54mm PinSockets, Wi-Fi Antenna UP, Dual USB-C DOWN)\\n"
         "  Left L1..L22: L1/L2=3V3, L3=RST, L4=GPIO4(CAN_TX), L5=GPIO5(CAN_RX),\\n"
-        "               L15=GPIO9(TFT_CS), L16=GPIO10(TFT_RES), L17=GPIO11(TFT_DC),\\n"
-        "               L18=GPIO12(TFT_MOSI), L19=GPIO13(TFT_SCK), L20=GPIO14(TFT_LED), L21=5V, L22=GND\\n"
-        "  Right R1..R22: R1=GND, R6=GPIO42(SD_CS), R7=GPIO41(SD_MOSI), R8=GPIO40(SD_MISO),\\n"
-        "                 R9=GPIO39(SD_SCK), R21=GND, R22=GND\\n"
+        "               L6=GPIO6(TFT_CS), L7=GPIO7(TFT_RES), L8=GPIO15(TFT_DC),\\n"
+        "               L9=GPIO16(TFT_MOSI), L10=GPIO17(TFT_SCK), L11=GPIO18(TFT_LED),\\n"
+        "               L15=GPIO9(SD_CS), L16=GPIO10(SD_MOSI), L17=GPIO11(SD_MISO),\\n"
+        "               L18=GPIO12(SD_SCK), L21=5V, L22=GND\\n"
+        "  Right R1..R22: R1=GND, R21=GND, R22=GND\\n"
         "- MOD1: MP1584EN DC-DC Buck Converter (D-SUN 22.1x16.8mm, 8 holes, 4.5-28V -> 5.0V 3A; IN+=12V, IN-=GND, OUT+=5V, OUT-=GND)\\n"
         "- MOD2: SN65HVD230 CAN Transceiver 3.3V (1=3V3, 2=GND, 3=CAN_TX, 4=CAN_RX, 5=CAN_L, 6=CAN_H)\\n"
         "- J1: KF301-4P (5.08mm) Vehicle 12V + CAN Bus (1=+12V_RAW, 2=GND, 3=CAN_L, 4=CAN_H; entry UP)\\n"
         "- JP1: 1x02 (2.54mm) CAN 120R Termination Jumper (Pin1=CAN_H, Pin2=CAN_TERM_MID -> R1 -> CAN_L)\\n"
-        "- J2: 1x08 (2.54mm) 1.28in Red GC9A01 TFT SPI (1=3V3, 2=GND, 3=CS, 4=RES, 5=DC/A0, 6=MOSI/SDA, 7=SCK, 8=LED)\\n"
-        "- J3: 1x04 (2.54mm) 1.28in Red Module MicroSD SPI (1=SD_CS, 2=SD_MOSI, 3=SD_MISO, 4=SD_SCK)\\n"
+        "- J2A: JST-XH 4P (S4B-XH-A, 2.50mm, left edge) 1.28in Red GC9A01 TFT 1..4 (1=3V3, 2=GND, 3=CS, 4=RES)\\n"
+        "- J2B: JST-XH 4P (S4B-XH-A, 2.50mm, left edge) 1.28in Red GC9A01 TFT 5..8 (1=DC/A0, 2=MOSI/SDA, 3=SCK, 4=LED)\\n"
+        "- J3: JST-XH 4P (S4B-XH-A, 2.50mm, left edge) 1.28in Red Module MicroSD SPI (1=SD_CS, 2=MOSI, 3=MISO, 4=SCK)\\n"
         "- C1: 100uF Radial Electrolytic (D5.0/P2.5) +5V_BUCK Bulk Filter (+ on Pin1)\\n"
         "- C2: 10uF Radial Electrolytic (D5.0/P2.5) +3V3 Filter (+ on Pin1)\\n\\n"
         "BOTTOM SIDE (B.Cu - SMD on Copper Layer):\\n"
         "- R1: 120R (1206) CAN Bus Termination Resistor (JP1 Pin2 CAN_TERM_MID <-> CAN_L)\\n"
-        "- C3: 100nF (1206) +3V3 High-Frequency Decoupling Capacitor (near J2 TFT)"
+        "- C3: 100nF (1206) +3V3 High-Frequency Decoupling Capacitor (near J2A TFT)"
     )
     sch_content = f"""(kicad_sch
   (version 20231120)

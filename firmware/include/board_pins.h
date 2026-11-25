@@ -47,30 +47,30 @@ static constexpr int PIN_CAN_TX          = 4;   // GPIO4 -> CAN TXD
 static constexpr int PIN_CAN_RX          = 5;   // GPIO5 <- CAN RXD
 
 // LTE Cat-1 / Cat-M1 Modem UART (SIMCom / Quectel)
-static constexpr int PIN_LTE_TX          = 17;
-static constexpr int PIN_LTE_RX          = 18;
-static constexpr int PIN_LTE_PWRKEY      = 16;
+static constexpr int PIN_LTE_TX          = 41;
+static constexpr int PIN_LTE_RX          = 40;
+static constexpr int PIN_LTE_PWRKEY      = 39;
 static constexpr int PIN_LTE_RESET       = 21;
 
 // Cabin Mini LED Indicator & Critical Buzzer
-static constexpr int PIN_LED_GREEN       = 15;  // Normal system indicator
-static constexpr int PIN_LED_YELLOW      = 7;   // Yellow pre-warning (> 60s)
-static constexpr int PIN_LED_RED         = 6;   // Critical Red hazard
+static constexpr int PIN_LED_GREEN       = 1;   // Normal system indicator
+static constexpr int PIN_LED_YELLOW      = 2;   // Yellow pre-warning (> 60s)
+static constexpr int PIN_LED_RED         = 42;  // Critical Red hazard
 static constexpr int PIN_BUZZER          = 8;   // Optional critical buzzer (RED state)
 
-// 1.28" Round GC9A01 240x240 SPI TFT Display (SPI2 / FSPI)
-static constexpr int PIN_TFT_CS          = 9;   // Display Chip Select
-static constexpr int PIN_TFT_RES         = 10;  // Display Hardware Reset
-static constexpr int PIN_TFT_DC          = 11;  // Data/Command (A0 on red display PCB)
-static constexpr int PIN_TFT_MOSI        = 12;  // SPI MOSI (SDA on red display PCB)
-static constexpr int PIN_TFT_SCK         = 13;  // SPI Clock (SCK on red display PCB)
-static constexpr int PIN_TFT_LED         = 14;  // Backlight PWM (LEDC)
+// 1.28" Round GC9A01 240x240 SPI TFT Display (SPI2 / FSPI) -> J2A (pins 1..4) + J2B (pins 1..4)
+static constexpr int PIN_TFT_CS          = 6;   // J2A.3 Display Chip Select (GPIO6 / L6)
+static constexpr int PIN_TFT_RES         = 7;   // J2A.4 Display Hardware Reset (GPIO7 / L7)
+static constexpr int PIN_TFT_DC          = 15;  // J2B.1 Data/Command A0 (GPIO15 / L8)
+static constexpr int PIN_TFT_MOSI        = 16;  // J2B.2 SPI MOSI SDA (GPIO16 / L9)
+static constexpr int PIN_TFT_SCK         = 17;  // J2B.3 SPI Clock SCK (GPIO17 / L10)
+static constexpr int PIN_TFT_LED         = 18;  // J2B.4 Backlight PWM LEDC (GPIO18 / L11)
 
-// MicroSD Card Reader on back of display (SPI3 / HSPI)
-static constexpr int PIN_SD_CS           = 42;  // SD Card Chip Select
-static constexpr int PIN_SD_MOSI         = 41;  // SD Card MOSI
-static constexpr int PIN_SD_MISO         = 40;  // SD Card MISO
-static constexpr int PIN_SD_SCK          = 39;  // SD Card SCK
+// MicroSD Card Reader on back of display (SPI3 / HSPI) -> J3 (pins 1..4)
+static constexpr int PIN_SD_CS           = 9;   // J3.1 SD Card Chip Select (GPIO9 / L15)
+static constexpr int PIN_SD_MOSI         = 10;  // J3.2 SD Card MOSI (GPIO10 / L16)
+static constexpr int PIN_SD_MISO         = 11;  // J3.3 SD Card MISO (GPIO11 / L17)
+static constexpr int PIN_SD_SCK          = 12;  // J3.4 SD Card SCK (GPIO12 / L18)
 
 // Service Button on S3 enclosure: enables BLE Installer Service Mode for 15 minutes
 static constexpr int PIN_BTN_SERVICE     = 0;   // GPIO0 (BOOT button on S3)

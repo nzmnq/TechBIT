@@ -302,8 +302,8 @@ def build_lut_single_pdf(tmp, sx, sy):
         single_board_tile(112.0, 138.0, vb_mk, in_mk, "4) UV-МАСКА B.Mask (тонером ВНИЗ до міді)", mirror=False),
         ruler_h(30.0, 248.0, 150),
         '<text x="27" y="268" class="t">• Перевірка розмірів: зовнішня рамка кожної плати = рівно 71.0 × 96.0 мм, лінійка = 150.0 мм.</text>',
-        '<text x="27" y="273" class="t">• Свердління: Ø0.9 мм (U1, MOD2, JP1, J2, J3, C1, C2 — 68 отв.), Ø1.0 мм (MOD1 MP1584EN — 8 отв.), Ø1.3 мм (J1 — 4 отв.).</text>',
-        '<text x="27" y="278" class="t">• SMD знизу: R1 (120R, 1206) термінатор CAN і C3 (100nF, 1206) фільтр живлення +3V3 біля J2.</text>',
+        '<text x="27" y="273" class="t">• Свердління: Ø0.9 мм (U1, MOD2, JP1, C1, C2 — 56 отв.), Ø0.95 мм (J2A/J2B/J3 JST-XH 4P — 12 отв.), Ø1.0 мм (MOD1 — 8 отв.), Ø1.3 мм (J1 — 4 отв.).</text>',
+        '<text x="27" y="278" class="t">• SMD знизу: R1 (120R, 1206) термінатор CAN і C3 (100nF, 1206) фільтр живлення +3V3 біля J2A.</text>',
     ]
     html = (
         f"<!doctype html><html><head><meta charset='utf-8'><style>{COMMON_SVG_CSS}</style></head>"
@@ -378,7 +378,7 @@ def build_assembly_guide_pdf(tmp):
         <div class="card">
           <b>SMD-компоненти на B.Cu (типорозмір 1206):</b><br>
           • <b>R1 — 120 Ω (1206):</b> термінатор шини CAN, підключений між <code>JP1.2 (CAN_TERM_MID)</code> та шиною <code>CAN_L</code>.<br>
-          • <b>C3 — 100 nF (1206):</b> високочастотний фільтр по лінії <code>+3V3 ↔ GND</code> безпосередньо біля роз'єму дисплея <code>J2</code>.
+          • <b>C3 — 100 nF (1206):</b> високочастотний фільтр по лінії <code>+3V3 ↔ GND</code> безпосередньо біля роз'єму дисплея <code>J2A</code>.
         </div>
         <div class="card">
           <b>Контроль травлення та маски перед пайкою:</b><br>
@@ -403,37 +403,39 @@ def build_assembly_guide_pdf(tmp):
         <tr><td><b>MOD2</b></td><td>SN65HVD230 CAN</td><td>PinHeader 1×06 2.54 мм</td><td>F.Cu (Верх)</td><td>Трансивер шини CAN 3.3V (GPIO4 TX / GPIO5 RX)</td></tr>
         <tr><td><b>J1</b></td><td>Клемник живлення та CAN</td><td>KF301-4P (5.08 мм, кутовий)</td><td>F.Cu (Верх)</td><td>Бортмережа +12V, GND, CAN_L, CAN_H (вхід ВГОРУ)</td></tr>
         <tr><td><b>JP1</b></td><td>Перемичка термінатора</td><td>PinHeader 1×02 2.54 мм + джампер</td><td>F.Cu (Верх)</td><td>Підключає 120 Ω між CAN_H та CAN_L</td></tr>
-        <tr><td><b>J2</b></td><td>Роз'єм дисплея TFT</td><td>PinHeader 1×08 2.54 мм</td><td>F.Cu (Верх)</td><td>1.28" червоний модуль GC9A01 SPI (8 пінів)</td></tr>
-        <tr><td><b>J3</b></td><td>Роз'єм MicroSD</td><td>PinHeader 1×04 2.54 мм</td><td>F.Cu (Верх)</td><td>Слот MicroSD на модулі 1.28" (4 піни SPI)</td></tr>
+        <tr><td><b>J2A</b></td><td>Роз'єм дисплея TFT (1..4)</td><td>JST-XH S4B-XH-A (4-pin, кутовий 2.5 мм)</td><td>F.Cu (Верх)</td><td>1.28" червоний GC9A01 SPI: живлення 3.3V, GND, CS, RES (лівий край)</td></tr>
+        <tr><td><b>J2B</b></td><td>Роз'єм дисплея TFT (5..8)</td><td>JST-XH S4B-XH-A (4-pin, кутовий 2.5 мм)</td><td>F.Cu (Верх)</td><td>1.28" червоний GC9A01 SPI: DC/A0, SDA/MOSI, SCK, LED (поруч із J2A)</td></tr>
+        <tr><td><b>J3</b></td><td>Роз'єм MicroSD</td><td>JST-XH S4B-XH-A (4-pin, кутовий 2.5 мм)</td><td>F.Cu (Верх)</td><td>Слот MicroSD на модулі 1.28" (4 піни SPI, одразу під J2B)</td></tr>
         <tr><td><b>C1</b></td><td>Електролітичний конд.</td><td>100 µF / ≥10V (D5.0, P2.5 мм)</td><td>F.Cu (Верх)</td><td>Фільтр живлення +5V_BUCK</td></tr>
         <tr><td><b>C2</b></td><td>Електролітичний конд.</td><td>10 µF / ≥6.3V (D5.0, P2.5 мм)</td><td>F.Cu (Верх)</td><td>Фільтр живлення +3V3</td></tr>
         <tr><td><b>R1</b></td><td>SMD резистор</td><td>120 Ω (1206)</td><td>B.Cu (Низ)</td><td>Термінатор CAN (активується джампером JP1)</td></tr>
-        <tr><td><b>C3</b></td><td>SMD керамічний конд.</td><td>100 nF (1206)</td><td>B.Cu (Низ)</td><td>Блокування +3V3 біля J2 TFT</td></tr>
+        <tr><td><b>C3</b></td><td>SMD керамічний конд.</td><td>100 nF (1206)</td><td>B.Cu (Низ)</td><td>Блокування +3V3 біля J2A TFT</td></tr>
       </table>
 
       <h2>2. Карта свердління отворів (всього 80 отворів на 1 плату)</h2>
       <table>
         <tr><th>Діаметр</th><th>К-сть</th><th>Компоненти</th></tr>
-        <tr><td><b>0.9 мм</b></td><td>68</td><td>U1 (44), J2 (8), MOD2 (6), J3 (4), JP1 (2), C1 (2), C2 (2)</td></tr>
+        <tr><td><b>0.9 мм</b></td><td>56</td><td>U1 (44), MOD2 (6), JP1 (2), C1 (2), C2 (2)</td></tr>
+        <tr><td><b>0.95 мм</b></td><td>12</td><td>J2A (4), J2B (4), J3 (4) — бокові роз'єми JST-XH 4P</td></tr>
         <tr><td><b>1.0 мм</b></td><td>8</td><td>MOD1 MP1584EN (8 силових отворів: 4 пари IN+/IN-/OUT+/OUT-)</td></tr>
         <tr><td><b>1.3 мм</b></td><td>4</td><td>J1 KF301-4P (силові клеми 12V / GND / CAN_L / CAN_H)</td></tr>
       </table>
 
-      <h2>3. Попровідна схема підключення 1.28" червоного модуля GC9A01 + MicroSD</h2>
+      <h2>3. Попровідна схема підключення 1.28" червоного модуля GC9A01 + MicroSD (3× JST-XH 4P)</h2>
       <table>
         <tr><th>Плата (Pin)</th><th>Сигнал (Net)</th><th>ESP32-S3 Pin / GPIO</th><th>Червоний модуль 1.28" GC9A01+SD</th><th>Примітка</th></tr>
-        <tr><td><code>J2.1</code></td><td><code>+3V3</code></td><td>L1, L2 (3V3)</td><td><b>VCC / 3V3</b> (8-pin TFT)</td><td>Живлення логіки та дисплея 3.3V</td></tr>
-        <tr><td><code>J2.2</code></td><td><code>GND</code></td><td>L22, R1, R21, R22 (GND)</td><td><b>GND</b> (8-pin TFT)</td><td>Загальна земля (живить і TFT, і SD на модулі)</td></tr>
-        <tr><td><code>J2.3</code></td><td><code>TFT_CS</code></td><td>L15 (GPIO9)</td><td><b>CS</b></td><td>Chip Select дисплея GC9A01</td></tr>
-        <tr><td><code>J2.4</code></td><td><code>TFT_RES</code></td><td>L16 (GPIO10)</td><td><b>RES / RST</b></td><td>Апаратне скидання дисплея</td></tr>
-        <tr><td><code>J2.5</code></td><td><code>TFT_DC</code></td><td>L17 (GPIO11)</td><td><b>DC / A0</b></td><td>Вибір Дані / Команда</td></tr>
-        <tr><td><code>J2.6</code></td><td><code>TFT_MOSI</code></td><td>L18 (GPIO12)</td><td><b>SDA / MOSI</b></td><td>SPI Data (на червоних платах часто підписано SDA)</td></tr>
-        <tr><td><code>J2.7</code></td><td><code>TFT_SCK</code></td><td>L19 (GPIO13)</td><td><b>SCK / SCL</b></td><td>SPI Clock дисплея</td></tr>
-        <tr><td><code>J2.8</code></td><td><code>TFT_LED</code></td><td>L20 (GPIO14)</td><td><b>LED / BLK</b></td><td>Керування підсвіткою (PWM / 3.3V)</td></tr>
-        <tr><td><code>J3.1</code></td><td><code>SD_CS</code></td><td>R6 (GPIO42)</td><td><b>SD_CS</b> (4-pin SD)</td><td>Chip Select карти MicroSD</td></tr>
-        <tr><td><code>J3.2</code></td><td><code>SD_MOSI</code></td><td>R7 (GPIO41)</td><td><b>MOSI</b> (4-pin SD)</td><td>Окрема шина SPI для MicroSD</td></tr>
-        <tr><td><code>J3.3</code></td><td><code>SD_MISO</code></td><td>R8 (GPIO40)</td><td><b>MISO</b> (4-pin SD)</td><td>Читання даних з MicroSD</td></tr>
-        <tr><td><code>J3.4</code></td><td><code>SD_SCK</code></td><td>R9 (GPIO39)</td><td><b>SCK</b> (4-pin SD)</td><td>Тактування SPI для MicroSD</td></tr>
+        <tr><td><code>J2A.1</code></td><td><code>+3V3</code></td><td>L1, L2 (3V3)</td><td><b>VCC / 3V3</b> (8-pin TFT)</td><td>Живлення логіки та дисплея 3.3V</td></tr>
+        <tr><td><code>J2A.2</code></td><td><code>GND</code></td><td>L22, R1, R21, R22 (GND)</td><td><b>GND</b> (8-pin TFT)</td><td>Загальна земля (живить і TFT, і SD на модулі)</td></tr>
+        <tr><td><code>J2A.3</code></td><td><code>TFT_CS</code></td><td>L6 (GPIO6)</td><td><b>CS</b></td><td>Chip Select дисплея GC9A01</td></tr>
+        <tr><td><code>J2A.4</code></td><td><code>TFT_RES</code></td><td>L7 (GPIO7)</td><td><b>RES / RST</b></td><td>Апаратний Reset дисплея</td></tr>
+        <tr><td><code>J2B.1</code></td><td><code>TFT_DC</code></td><td>L8 (GPIO15)</td><td><b>DC / A0</b></td><td>Вибір Дані / Команда</td></tr>
+        <tr><td><code>J2B.2</code></td><td><code>TFT_MOSI</code></td><td>L9 (GPIO16)</td><td><b>SDA / MOSI</b></td><td>SPI Data (на червоних платах часто підписано SDA)</td></tr>
+        <tr><td><code>J2B.3</code></td><td><code>TFT_SCK</code></td><td>L10 (GPIO17)</td><td><b>SCK / SCL</b></td><td>SPI Clock дисплея</td></tr>
+        <tr><td><code>J2B.4</code></td><td><code>TFT_LED</code></td><td>L11 (GPIO18)</td><td><b>LED / BLK</b></td><td>Керування підсвіткою (PWM / 3.3V)</td></tr>
+        <tr><td><code>J3.1</code></td><td><code>SD_CS</code></td><td>L15 (GPIO9)</td><td><b>SD_CS</b> (4-pin SD)</td><td>Chip Select карти MicroSD</td></tr>
+        <tr><td><code>J3.2</code></td><td><code>SD_MOSI</code></td><td>L16 (GPIO10)</td><td><b>MOSI</b> (4-pin SD)</td><td>Окрема шина SPI для MicroSD</td></tr>
+        <tr><td><code>J3.3</code></td><td><code>SD_MISO</code></td><td>L17 (GPIO11)</td><td><b>MISO</b> (4-pin SD)</td><td>Читання даних з MicroSD</td></tr>
+        <tr><td><code>J3.4</code></td><td><code>SD_SCK</code></td><td>L18 (GPIO12)</td><td><b>SCK</b> (4-pin SD)</td><td>Тактування SPI для MicroSD</td></tr>
       </table>
 
       <h2>4. Підключення шини CAN та живлення автомобіля (J1 + MOD2 + JP1)</h2>

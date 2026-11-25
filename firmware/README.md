@@ -27,11 +27,11 @@
 | Підсистема | Сигнал | GPIO | Примітка |
 |---|---|---|---|
 | **CAN (TWAI 500 kbps)** | TX / RX | `GPIO4` / `GPIO5` | Шина тягача (передні/задні осі C3) |
-| **LTE-модем (UART1)** | TX / RX / PWRKEY / RESET | `GPIO17` / `GPIO18` / `GPIO16` / `GPIO21` | SIMCom / Quectel + LittleFS черга |
-| **Mini LED + Зумер** | GREEN / YELLOW / RED / BUZZER | `GPIO15` / `GPIO7` / `GPIO6` / `GPIO8` | Індикація стану в кабіні (зумер перенесено на GPIO8) |
+| **LTE-модем (UART1)** | TX / RX / PWRKEY / RESET | `GPIO41` / `GPIO40` / `GPIO39` / `GPIO21` | SIMCom / Quectel + LittleFS черга |
+| **Mini LED + Зумер** | GREEN / YELLOW / RED / BUZZER | `GPIO1` / `GPIO2` / `GPIO42` / `GPIO8` | Індикація стану в кабіні |
 | **Сервісна кнопка BLE** | BTN_SERVICE | `GPIO0` | Вмикає Web Bluetooth для СТО на 15 хв |
-| **1.28" GC9A01 TFT (SPI2 / FSPI)** | CS / RES / DC(A0) / MOSI(SDA) / SCK / LED | `GPIO9` / `GPIO10` / `GPIO11` / `GPIO12` / `GPIO13` / `GPIO14` | 240×240 IPS @ 40 MHz, PWM-підсвітка (LEDC) |
-| **microSD на дисплеї (SPI3 / HSPI)** | CS / MOSI / MISO / SCK | `GPIO42` / `GPIO41` / `GPIO40` / `GPIO39` | Окрема шина SPI3, гаряче монтування |
+| **1.28" GC9A01 TFT (SPI2 / FSPI)** | CS / RES / DC(A0) / MOSI(SDA) / SCK / LED | `GPIO6` / `GPIO7` / `GPIO15` / `GPIO16` / `GPIO17` / `GPIO18` | Роз'єми `J2A` (3V3, GND, CS, RES) + `J2B` (DC, MOSI, SCK, LED), 40 MHz |
+| **microSD на дисплеї (SPI3 / HSPI)** | CS / MOSI / MISO / SCK | `GPIO9` / `GPIO10` / `GPIO11` / `GPIO12` | Роз'єм `J3` (JST-XH 4P поруч із `J2A/J2B`), окрема шина SPI3 |
 
 ## Логування microSD та Serial CLI (`s3_master`, 115200 baud)
 - **Шляхи на microSD:**
