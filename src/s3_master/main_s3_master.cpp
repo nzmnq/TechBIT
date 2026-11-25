@@ -91,6 +91,9 @@ void loadStateFromNvs() {
     g_rules.setAssetIds(trId.c_str(), tlId.c_str());
 
     rules::RuleConfig& cfg = g_rules.config();
+    cfg.vehicleClass       = (g_prefs.getUChar("veh_cls", 0) == 1)
+                                 ? rules::VEHICLE_TRUCK
+                                 : rules::VEHICLE_CROSSOVER;
     cfg.tempWarnC          = g_prefs.getFloat("t_warn", cfg.tempWarnC);
     cfg.tempCritC          = g_prefs.getFloat("t_crit", cfg.tempCritC);
     cfg.axleTempDeltaWarnC = g_prefs.getFloat("dt_warn", cfg.axleTempDeltaWarnC);
@@ -103,6 +106,7 @@ void loadStateFromNvs() {
 void saveConfigToNvs() {
     const rules::RuleConfig& cfg = g_rules.config();
     g_prefs.begin("tb_s3", false);
+    g_prefs.putUChar("veh_cls", static_cast<uint8_t>(cfg.vehicleClass));
     g_prefs.putFloat("t_warn", cfg.tempWarnC);
     g_prefs.putFloat("t_crit", cfg.tempCritC);
     g_prefs.putFloat("dt_warn", cfg.axleTempDeltaWarnC);
@@ -236,14 +240,16 @@ void publishS3WorkbenchJson() {
     const char* sev = (ind.driverSeverity == rules::SEV_RED)
                           ? "RED"
                           : (ind.driverSeverity == rules::SEV_YELLOW ? "YELLOW" : "GREEN");
-    static char buf[1200];
+    const char* veh = (g_rules.config().vehicleClass == rules::VEHICLE_TRUCK) ? "truck" : "crossover";
+    static char buf[1700];
     size_t pos = static_cast<size_t>(std::snprintf(
         buf, sizeof(buf),
         "{\"type\":\"techbit_s3_master\",\"mcu\":\"ESP32-S3\",\"deviceId\":\"%s\","
-        "\"tractorId\":\"%s\",\"trailerId\":\"%s\",\"severity\":\"%s\",\"wheelCode\":\"%s\","
+        "\"vehicleClass\":\"%s\",\"tractorId\":\"%s\",\"trailerId\":\"%s\",\"severity\":\"%s\",\"wheelCode\":\"%s\","
         "\"buzzerOn\":%s,\"activeNodes\":%u,\"offlineNodes\":%u,\"blackBoxRecs\":%u,"
         "\"bleActive\":%s,\"lteOnline\":%s,\"pendingQueue\":%u,\"shadow\":%s,\"nodes\":[",
         g_deviceId,
+        veh,
         g_rules.tractorId(),
         g_rules.trailerId()[0] ? g_rules.trailerId() : "",
         sev,
@@ -259,14 +265,15 @@ void publishS3WorkbenchJson() {
 
     bool first = true;
     const auto* nodes = g_rules.nodes();
-    for (uint8_t i = 0; i < kMaxTrackedNodes && pos + 110 < sizeof(buf); ++i) {
+    for (uint8_t i = 0; i < kMaxTrackedNodes && pos + 170 < sizeof(buf); ++i) {
         if (!nodes[i].used) continue;
         char nid[12];
         can2::formatNodeIdString(nodes[i].telemetry.nodeId, nid);
         pos += static_cast<size_t>(std::snprintf(
             buf + pos, sizeof(buf) - pos,
             "%s{\"id\":\"%s\",\"slot\":%u,\"online\":%s,\"trailer\":%s,"
-            "\"tL\":%.1f,\"tR\":%.1f,\"vL\":%.2f,\"vR\":%.2f,\"fL\":%u,\"fR\":%u}",
+            "\"tL\":%.1f,\"tR\":%.1f,\"vL\":%.2f,\"vR\":%.2f,\"fL\":%u,\"fR\":%u,"
+            "\"kL\":%.2f,\"kR\":%.2f,\"hfL\":%.2f,\"hfR\":%.2f,\"zL\":%.2f,\"zR\":%.2f,\"bReady\":%s}",
             first ? "" : ",",
             nid,
             static_cast<unsigned>(nodes[i].slot),
@@ -277,7 +284,14 @@ void publishS3WorkbenchJson() {
             nodes[i].telemetry.vibRmsLeft,
             nodes[i].telemetry.vibRmsRight,
             static_cast<unsigned>(nodes[i].telemetry.domFreqLeftHz),
-            static_cast<unsigned>(nodes[i].telemetry.domFreqRightHz)));
+            static_cast<unsigned>(nodes[i].telemetry.domFreqRightHz),
+            nodes[i].telemetry.kurtosisLeft,
+            nodes[i].telemetry.kurtosisRight,
+            nodes[i].telemetry.hfEnergyLeft,
+            nodes[i].telemetry.hfEnergyRight,
+            nodes[i].baseLeft.lastZScore,
+            nodes[i].baseRight.lastZScore,
+            (nodes[i].baseLeft.ready || nodes[i].baseRight.ready) ? "true" : "false"));
         first = false;
     }
     std::snprintf(buf + pos, sizeof(buf) - pos, "]}");
@@ -320,6 +334,19 @@ void handleSerialCmd(const char* line) {
     } else if (std::strncmp(line, "trailer ", 8) == 0) {
         g_rules.setAssetIds(g_rules.tractorId(), line + 8);
         saveMappingAndIdsToNvs();
+    } else if (std::strcmp(line, "relearn") == 0) {
+        g_rules.resetBaselines();
+        Serial.println("[S3 Master] Auto-Baseline reset — learning new vehicle norm.");
+    } else if (std::strcmp(line, "vehicle crossover") == 0) {
+        g_rules.config().vehicleClass = rules::VEHICLE_CROSSOVER;
+        g_rules.resetBaselines();
+        saveConfigToNvs();
+        Serial.println("[S3 Master] Vehicle class -> CROSSOVER (Hyundai Santa Fe MVP)");
+    } else if (std::strcmp(line, "vehicle truck") == 0) {
+        g_rules.config().vehicleClass = rules::VEHICLE_TRUCK;
+        g_rules.resetBaselines();
+        saveConfigToNvs();
+        Serial.println("[S3 Master] Vehicle class -> TRUCK (40t)");
     } else if (std::strncmp(line, "cfg ", 4) == 0) {
         if (rules::applyJsonConfigUpdate(line + 4, g_rules.config())) {
             saveConfigToNvs();
@@ -412,11 +439,15 @@ void loop() {
             hb.nodeId = nodeId;
             can2::unpackHeartbeatFrame(canRx.data, hb);
             g_rules.onNodeHeartbeat(hb, false, nowMs);
-        } else if (type == can2::MSG_AXLE_VIB || type == can2::MSG_AXLE_TEMP_META) {
+        } else if (type == can2::MSG_AXLE_VIB ||
+                   type == can2::MSG_AXLE_ML_FEATURES ||
+                   type == can2::MSG_AXLE_TEMP_META) {
             can2::AxleTelemetry* t = getOrCreateCanNode(nodeId);
             if (t) {
                 if (type == can2::MSG_AXLE_VIB) {
                     can2::unpackAxleVibFrame(canRx.data, *t);
+                } else if (type == can2::MSG_AXLE_ML_FEATURES) {
+                    can2::unpackAxleMlFeaturesFrame(canRx.data, *t);
                 } else {
                     can2::unpackAxleTempFrame(canRx.data, *t);
                     g_rules.onAxleTelemetry(*t, false, nowMs);

@@ -13,17 +13,18 @@ namespace can2 {
 // ============================================================================
 
 enum CanMsgType : uint8_t {
-    MSG_AXLE_VIB        = 0x01, // L & R vibration RMS (mm/s), peak, crest factor
-    MSG_AXLE_TEMP_META  = 0x02, // L & R temperatures (0.1°C), dominant FFT freq, flags
-    MSG_HEARTBEAT       = 0x03, // Node health, FW version, uptime
-    MSG_RAW_BURST_CHUNK = 0x04, // Detailed sample/frame chunk requested on anomaly
-    MSG_MASTER_CMD      = 0x10  // S3/Bridge -> C3 Node command
+    MSG_AXLE_VIB         = 0x01, // L & R vibration RMS (mm/s), peak, crest factor
+    MSG_AXLE_TEMP_META   = 0x02, // L & R temperatures (0.1°C), dominant FFT freq, flags
+    MSG_HEARTBEAT        = 0x03, // Node health, FW version, uptime
+    MSG_RAW_BURST_CHUNK  = 0x04, // Detailed sample/frame chunk requested on anomaly
+    MSG_AXLE_ML_FEATURES = 0x05, // Domain-invariant ML features: kurtosis, HF energy, tonality, bandLow
+    MSG_MASTER_CMD       = 0x10  // S3/Bridge -> C3 Node command
 };
 
 enum MasterCommandCode : uint8_t {
-    CMD_HEARTBEAT_REQ   = 0x01,
+    CMD_HEARTBEAT_REQ     = 0x01,
     CMD_REQUEST_RAW_BURST = 0x02,
-    CMD_IDENTIFY_LED    = 0x03
+    CMD_IDENTIFY_LED      = 0x03
 };
 
 enum NodeStatusFlags : uint8_t {
@@ -37,19 +38,29 @@ enum NodeStatusFlags : uint8_t {
 };
 
 struct AxleTelemetry {
-    uint32_t nodeId;         // 24-bit hardware MAC identifier (e.g. 0x998877 -> "C3_998877")
-    float    tempLeftC;      // °C (SI)
-    float    tempRightC;     // °C (SI)
-    float    vibRmsLeft;     // mm/s equivalent / calibrated intensity
-    float    vibRmsRight;    // mm/s
-    float    vibPeakLeft;
-    float    vibPeakRight;
-    float    crestLeft;
-    float    crestRight;
-    uint16_t domFreqLeftHz;
-    uint16_t domFreqRightHz;
-    uint8_t  statusFlags;
-    uint8_t  seq;
+    uint32_t nodeId        = 0;     // 24-bit hardware MAC identifier (e.g. 0x998877 -> "C3_998877")
+    float    tempLeftC     = 25.0f; // °C (SI)
+    float    tempRightC    = 25.0f; // °C (SI)
+    float    vibRmsLeft    = 0.0f;  // mm/s equivalent / calibrated intensity
+    float    vibRmsRight   = 0.0f;  // mm/s
+    float    vibPeakLeft   = 0.0f;
+    float    vibPeakRight  = 0.0f;
+    float    crestLeft     = 1.0f;
+    float    crestRight    = 1.0f;
+    uint16_t domFreqLeftHz = 0;
+    uint16_t domFreqRightHz = 0;
+    uint8_t  statusFlags   = 0;
+    uint8_t  seq           = 0;
+
+    // Domain-invariant ML features (work identically on Hyundai Santa Fe & 40t trucks!)
+    float    kurtosisLeft  = 3.0f;  // ~3.0 normal Gaussian noise, > 5.5 impulsive bearing spall
+    float    kurtosisRight = 3.0f;
+    float    hfEnergyLeft  = 0.25f; // Fraction of FFT energy in 600..4500 Hz (0..1)
+    float    hfEnergyRight = 0.25f;
+    float    tonalityLeft  = 1.0f;  // Spectral peak-to-mean ratio
+    float    tonalityRight = 1.0f;
+    float    bandLowLeft   = 0.50f; // Fraction of FFT energy in 80..600 Hz (road band)
+    float    bandLowRight  = 0.50f;
 };
 
 struct NodeHeartbeat {
@@ -117,12 +128,6 @@ inline int16_t clampI16(float v) {
 }
 
 // Frame 1 (MSG_AXLE_VIB):
-// [0..1] vib_rms_L * 100 (u16 -> 0.01 .. 655.35 mm/s)
-// [2..3] vib_rms_R * 100 (u16)
-// [4]    vib_peak_L * 10 (u8 -> up to 25.5 mm/s)
-// [5]    vib_peak_R * 10 (u8)
-// [6]    crest_L * 10 (u8)
-// [7]    crest_R * 10 (u8)
 inline void packAxleVibFrame(const AxleTelemetry& t, uint8_t out[8]) {
     putU16(&out[0], clampU16(t.vibRmsLeft * 100.0f));
     putU16(&out[2], clampU16(t.vibRmsRight * 100.0f));
@@ -142,12 +147,6 @@ inline void unpackAxleVibFrame(const uint8_t in[8], AxleTelemetry& t) {
 }
 
 // Frame 2 (MSG_AXLE_TEMP_META):
-// [0..1] temp_L * 10 (int16 -> 0.1 °C)
-// [2..3] temp_R * 10 (int16 -> 0.1 °C)
-// [4]    dom_freq_L / 20 (u8 -> 0..5100 Hz)
-// [5]    dom_freq_R / 20 (u8)
-// [6]    status_flags
-// [7]    seq
 inline void packAxleTempFrame(const AxleTelemetry& t, uint8_t out[8]) {
     putU16(&out[0], static_cast<uint16_t>(clampI16(t.tempLeftC * 10.0f)));
     putU16(&out[2], static_cast<uint16_t>(clampI16(t.tempRightC * 10.0f)));
@@ -166,7 +165,38 @@ inline void unpackAxleTempFrame(const uint8_t in[8], AxleTelemetry& t) {
     t.seq            = in[7];
 }
 
-// Frame 3 (MSG_HEARTBEAT):
+// Frame 3 (MSG_AXLE_ML_FEATURES):
+// [0] kurtosis_L * 10 (0..25.5)
+// [1] kurtosis_R * 10
+// [2] hf_energy_L * 250 (0..1.0 -> 600..4500 Hz ratio)
+// [3] hf_energy_R * 250
+// [4] tonality_L * 10 (0..25.5)
+// [5] tonality_R * 10
+// [6] band_low_L * 250 (0..1.0 -> 80..600 Hz ratio)
+// [7] band_low_R * 250
+inline void packAxleMlFeaturesFrame(const AxleTelemetry& t, uint8_t out[8]) {
+    out[0] = clampU8(t.kurtosisLeft * 10.0f);
+    out[1] = clampU8(t.kurtosisRight * 10.0f);
+    out[2] = clampU8(t.hfEnergyLeft * 250.0f);
+    out[3] = clampU8(t.hfEnergyRight * 250.0f);
+    out[4] = clampU8(t.tonalityLeft * 10.0f);
+    out[5] = clampU8(t.tonalityRight * 10.0f);
+    out[6] = clampU8(t.bandLowLeft * 250.0f);
+    out[7] = clampU8(t.bandLowRight * 250.0f);
+}
+
+inline void unpackAxleMlFeaturesFrame(const uint8_t in[8], AxleTelemetry& t) {
+    t.kurtosisLeft  = static_cast<float>(in[0]) * 0.1f;
+    t.kurtosisRight = static_cast<float>(in[1]) * 0.1f;
+    t.hfEnergyLeft  = static_cast<float>(in[2]) / 250.0f;
+    t.hfEnergyRight = static_cast<float>(in[3]) / 250.0f;
+    t.tonalityLeft  = static_cast<float>(in[4]) * 0.1f;
+    t.tonalityRight = static_cast<float>(in[5]) * 0.1f;
+    t.bandLowLeft   = static_cast<float>(in[6]) / 250.0f;
+    t.bandLowRight  = static_cast<float>(in[7]) / 250.0f;
+}
+
+// Frame 4 (MSG_HEARTBEAT):
 inline void packHeartbeatFrame(const NodeHeartbeat& hb, uint8_t out[8]) {
     out[0] = hb.fwMajor;
     out[1] = hb.fwMinor;

@@ -34,6 +34,10 @@ struct CompactNodeRecord {
     uint16_t vibRmsRightX100;
     uint16_t vibPeakLeftX10;
     uint16_t vibPeakRightX10;
+    uint8_t  kurtosisLeftX10;
+    uint8_t  kurtosisRightX10;
+    uint8_t  hfEnergyLeftX250;
+    uint8_t  hfEnergyRightX250;
     uint8_t  statusFlags;
     uint8_t  seq;
 };
@@ -103,29 +107,37 @@ inline bool validateTelemetryPacket(const uint8_t* raw, size_t len, TrailerTelem
 
 inline CompactNodeRecord toCompactRecord(const can2::AxleTelemetry& t) {
     CompactNodeRecord r{};
-    r.nodeId         = t.nodeId;
-    r.tempLeftX10    = can2::clampI16(t.tempLeftC * 10.0f);
-    r.tempRightX10   = can2::clampI16(t.tempRightC * 10.0f);
-    r.vibRmsLeftX100 = can2::clampU16(t.vibRmsLeft * 100.0f);
-    r.vibRmsRightX100 = can2::clampU16(t.vibRmsRight * 100.0f);
-    r.vibPeakLeftX10 = can2::clampU16(t.vibPeakLeft * 10.0f);
-    r.vibPeakRightX10 = can2::clampU16(t.vibPeakRight * 10.0f);
-    r.statusFlags    = t.statusFlags;
-    r.seq            = t.seq;
+    r.nodeId           = t.nodeId;
+    r.tempLeftX10      = can2::clampI16(t.tempLeftC * 10.0f);
+    r.tempRightX10     = can2::clampI16(t.tempRightC * 10.0f);
+    r.vibRmsLeftX100   = can2::clampU16(t.vibRmsLeft * 100.0f);
+    r.vibRmsRightX100  = can2::clampU16(t.vibRmsRight * 100.0f);
+    r.vibPeakLeftX10   = can2::clampU16(t.vibPeakLeft * 10.0f);
+    r.vibPeakRightX10  = can2::clampU16(t.vibPeakRight * 10.0f);
+    r.kurtosisLeftX10  = can2::clampU8(t.kurtosisLeft * 10.0f);
+    r.kurtosisRightX10 = can2::clampU8(t.kurtosisRight * 10.0f);
+    r.hfEnergyLeftX250 = can2::clampU8(t.hfEnergyLeft * 250.0f);
+    r.hfEnergyRightX250 = can2::clampU8(t.hfEnergyRight * 250.0f);
+    r.statusFlags      = t.statusFlags;
+    r.seq              = t.seq;
     return r;
 }
 
 inline can2::AxleTelemetry fromCompactRecord(const CompactNodeRecord& r) {
     can2::AxleTelemetry t{};
-    t.nodeId       = r.nodeId;
-    t.tempLeftC    = static_cast<float>(r.tempLeftX10) * 0.1f;
-    t.tempRightC   = static_cast<float>(r.tempRightX10) * 0.1f;
-    t.vibRmsLeft   = static_cast<float>(r.vibRmsLeftX100) * 0.01f;
-    t.vibRmsRight  = static_cast<float>(r.vibRmsRightX100) * 0.01f;
-    t.vibPeakLeft  = static_cast<float>(r.vibPeakLeftX10) * 0.1f;
-    t.vibPeakRight = static_cast<float>(r.vibPeakRightX10) * 0.1f;
-    t.statusFlags  = r.statusFlags;
-    t.seq          = r.seq;
+    t.nodeId        = r.nodeId;
+    t.tempLeftC     = static_cast<float>(r.tempLeftX10) * 0.1f;
+    t.tempRightC    = static_cast<float>(r.tempRightX10) * 0.1f;
+    t.vibRmsLeft    = static_cast<float>(r.vibRmsLeftX100) * 0.01f;
+    t.vibRmsRight   = static_cast<float>(r.vibRmsRightX100) * 0.01f;
+    t.vibPeakLeft   = static_cast<float>(r.vibPeakLeftX10) * 0.1f;
+    t.vibPeakRight  = static_cast<float>(r.vibPeakRightX10) * 0.1f;
+    t.kurtosisLeft  = (r.kurtosisLeftX10 > 0) ? (static_cast<float>(r.kurtosisLeftX10) * 0.1f) : 3.0f;
+    t.kurtosisRight = (r.kurtosisRightX10 > 0) ? (static_cast<float>(r.kurtosisRightX10) * 0.1f) : 3.0f;
+    t.hfEnergyLeft  = static_cast<float>(r.hfEnergyLeftX250) / 250.0f;
+    t.hfEnergyRight = static_cast<float>(r.hfEnergyRightX250) / 250.0f;
+    t.statusFlags   = r.statusFlags;
+    t.seq           = r.seq;
     return t;
 }
 

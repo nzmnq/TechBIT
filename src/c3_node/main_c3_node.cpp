@@ -63,6 +63,14 @@ float    g_peakL     = 0.0f;
 float    g_peakR     = 0.0f;
 float    g_crestL    = 1.0f;
 float    g_crestR    = 1.0f;
+float    g_kurtSumL  = 0.0f;
+float    g_kurtSumR  = 0.0f;
+float    g_hfSumL    = 0.0f;
+float    g_hfSumR    = 0.0f;
+float    g_lowSumL   = 0.0f;
+float    g_lowSumR   = 0.0f;
+float    g_tonalSumL = 0.0f;
+float    g_tonalSumR = 0.0f;
 float    g_dcOffsetL = 1650.0f;
 float    g_dcOffsetR = 1650.0f;
 uint16_t g_domHzL    = 0;
@@ -211,16 +219,18 @@ void publishWebSerialJson(const can2::AxleTelemetry& pkt,
                           float rmsMvL, float rmsMvR,
                           float rhPct, bool shtOk,
                           uint32_t nowMs) {
-    static char jsonBuf[1400];
+    static char jsonBuf[1650];
     size_t pos = static_cast<size_t>(std::snprintf(
         jsonBuf, sizeof(jsonBuf),
         "{\"type\":\"techbit_c3_node\",\"mcu\":\"ESP32-C3\",\"nodeId\":\"%s\",\"slot\":%u,\"tsMs\":%lu,"
-        "\"left\":{\"rmsMv\":%.2f,\"rmsMmS\":%.2f,\"peakMmS\":%.2f,\"crest\":%.2f,\"dcOffsetMv\":%.1f,"
+        "\"left\":{\"rmsMv\":%.2f,\"rmsMmS\":%.2f,\"peakMmS\":%.2f,\"crest\":%.2f,"
+        "\"kurtosis\":%.2f,\"hfEnergy\":%.3f,\"bandLow\":%.3f,\"tonality\":%.2f,\"dcOffsetMv\":%.1f,"
         "\"fDomHz\":%u,\"clip\":%s,\"tempC\":%.2f,\"rh\":%.1f,\"shtOk\":%s,\"spectrum\":[",
         g_nodeName,
         static_cast<unsigned>(g_savedSlot),
         static_cast<unsigned long>(nowMs),
-        rmsMvL, pkt.vibRmsLeft, pkt.vibPeakLeft, pkt.crestLeft, g_dcOffsetL,
+        rmsMvL, pkt.vibRmsLeft, pkt.vibPeakLeft, pkt.crestLeft,
+        pkt.kurtosisLeft, pkt.hfEnergyLeft, pkt.bandLowLeft, pkt.tonalityLeft, g_dcOffsetL,
         static_cast<unsigned>(pkt.domFreqLeftHz),
         (pkt.statusFlags & can2::FLAG_LEFT_CLIP) ? "true" : "false",
         pkt.tempLeftC, rhPct, shtOk ? "true" : "false"));
@@ -232,11 +242,13 @@ void publishWebSerialJson(const can2::AxleTelemetry& pkt,
 
     pos += static_cast<size_t>(std::snprintf(
         jsonBuf + pos, (pos < sizeof(jsonBuf) ? sizeof(jsonBuf) - pos : 0),
-        "]},\"right\":{\"rmsMv\":%.2f,\"rmsMmS\":%.2f,\"peakMmS\":%.2f,\"crest\":%.2f,\"dcOffsetMv\":%.1f,"
+        "]},\"right\":{\"rmsMv\":%.2f,\"rmsMmS\":%.2f,\"peakMmS\":%.2f,\"crest\":%.2f,"
+        "\"kurtosis\":%.2f,\"hfEnergy\":%.3f,\"bandLow\":%.3f,\"tonality\":%.2f,\"dcOffsetMv\":%.1f,"
         "\"fDomHz\":%u,\"clip\":%s,\"tempC\":%.2f,\"rh\":%.1f,\"shtOk\":%s},"
         "\"i2c\":{\"sda\":%d,\"scl\":%d,\"addr\":\"0x%02X\",\"err\":%u},"
         "\"can\":{\"ready\":%s,\"tx\":%lu,\"err\":%lu}}",
-        rmsMvR, pkt.vibRmsRight, pkt.vibPeakRight, pkt.crestRight, g_dcOffsetR,
+        rmsMvR, pkt.vibRmsRight, pkt.vibPeakRight, pkt.crestRight,
+        pkt.kurtosisRight, pkt.hfEnergyRight, pkt.bandLowRight, pkt.tonalityRight, g_dcOffsetR,
         static_cast<unsigned>(pkt.domFreqRightHz),
         (pkt.statusFlags & can2::FLAG_RIGHT_CLIP) ? "true" : "false",
         pkt.tempRightC, rhPct, shtOk ? "true" : "false",
@@ -320,6 +332,14 @@ void loop() {
         if (pR > g_peakR) g_peakR = pR;
         if (featL.crestFactor > g_crestL) g_crestL = featL.crestFactor;
         if (featR.crestFactor > g_crestR) g_crestR = featR.crestFactor;
+        g_kurtSumL  += featL.kurtosis;
+        g_kurtSumR  += featR.kurtosis;
+        g_hfSumL    += (featL.bandMidRatio + featL.bandHighRatio);
+        g_hfSumR    += (featR.bandMidRatio + featR.bandHighRatio);
+        g_lowSumL   += featL.bandLowRatio;
+        g_lowSumR   += featR.bandLowRatio;
+        g_tonalSumL += featL.tonalityRatio;
+        g_tonalSumR += featR.tonalityRatio;
         g_domHzL = static_cast<uint16_t>(featL.dominantFreqHz + 0.5f);
         g_domHzR = static_cast<uint16_t>(featR.dominantFreqHz + 0.5f);
         g_clipL  = g_clipL || featL.surgeClipping;
@@ -368,6 +388,14 @@ void loop() {
         pkt.crestRight     = g_crestR;
         pkt.domFreqLeftHz  = g_domHzL;
         pkt.domFreqRightHz = g_domHzR;
+        pkt.kurtosisLeft   = g_kurtSumL * invN;
+        pkt.kurtosisRight  = g_kurtSumR * invN;
+        pkt.hfEnergyLeft   = g_hfSumL * invN;
+        pkt.hfEnergyRight  = g_hfSumR * invN;
+        pkt.bandLowLeft    = g_lowSumL * invN;
+        pkt.bandLowRight   = g_lowSumR * invN;
+        pkt.tonalityLeft   = g_tonalSumL * invN;
+        pkt.tonalityRight  = g_tonalSumR * invN;
         pkt.seq            = g_txSeq;
 
         uint8_t flags = 0;
@@ -391,15 +419,21 @@ void loop() {
             g_burstHead = static_cast<uint8_t>((g_burstHead + 1U) % kC3BurstRingFrames);
             if (g_burstCount < kC3BurstRingFrames) ++g_burstCount;
 
-            uint8_t fVib[8], fTemp[8];
+            uint8_t fVib[8], fTemp[8], fMl[8];
             can2::packAxleVibFrame(pkt, fVib);
             can2::packAxleTempFrame(pkt, fTemp);
+            can2::packAxleMlFeaturesFrame(pkt, fMl);
             g_can.sendExtendedFrame(can2::makeExtId(can2::MSG_AXLE_VIB, g_nodeId24), fVib, 8);
+            g_can.sendExtendedFrame(can2::makeExtId(can2::MSG_AXLE_ML_FEATURES, g_nodeId24), fMl, 8);
             g_can.sendExtendedFrame(can2::makeExtId(can2::MSG_AXLE_TEMP_META, g_nodeId24), fTemp, 8);
 
             g_rmsSqL = g_rmsSqR = g_rmsMvSqL = g_rmsMvSqR = 0.0f;
             g_peakL  = g_peakR  = 0.0f;
             g_crestL = g_crestR = 1.0f;
+            g_kurtSumL = g_kurtSumR = 0.0f;
+            g_hfSumL   = g_hfSumR   = 0.0f;
+            g_lowSumL  = g_lowSumR  = 0.0f;
+            g_tonalSumL = g_tonalSumR = 0.0f;
             g_clipL  = g_clipR  = false;
             g_winCount = 0;
         }

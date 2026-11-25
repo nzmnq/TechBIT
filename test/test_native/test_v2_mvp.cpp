@@ -264,6 +264,130 @@ void test_black_box_ring_buffer_and_ingest_json_contract(void) {
     TEST_ASSERT_NOT_NULL(std::strstr(json, "\"burst_samples_base64\":"));
 }
 
+void test_can_v2_ml_features_roundtrip(void) {
+    can2::AxleTelemetry tx{};
+    tx.nodeId        = 0xAABBCCU;
+    tx.kurtosisLeft  = 7.4f;
+    tx.kurtosisRight = 3.1f;
+    tx.hfEnergyLeft  = 0.68f;
+    tx.hfEnergyRight = 0.24f;
+    tx.tonalityLeft  = 6.2f;
+    tx.tonalityRight = 1.4f;
+    tx.bandLowLeft   = 0.22f;
+    tx.bandLowRight  = 0.64f;
+
+    uint8_t fMl[8];
+    can2::packAxleMlFeaturesFrame(tx, fMl);
+
+    can2::AxleTelemetry rx{};
+    can2::unpackAxleMlFeaturesFrame(fMl, rx);
+
+    TEST_ASSERT_FLOAT_WITHIN(0.15f, tx.kurtosisLeft, rx.kurtosisLeft);
+    TEST_ASSERT_FLOAT_WITHIN(0.15f, tx.kurtosisRight, rx.kurtosisRight);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, tx.hfEnergyLeft, rx.hfEnergyLeft);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, tx.hfEnergyRight, rx.hfEnergyRight);
+    TEST_ASSERT_FLOAT_WITHIN(0.15f, tx.tonalityLeft, rx.tonalityLeft);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, tx.bandLowLeft, rx.bandLowLeft);
+}
+
+void test_crossover_auto_baseline_zscore_and_kurtosis_detects_low_rms_bearing_fault(void) {
+    rules::RuleEngine engine;
+    engine.init();
+    engine.config().vehicleClass       = rules::VEHICLE_CROSSOVER; // Hyundai Santa Fe MVP
+    engine.config().yellowConfirmMs    = 10000U;                   // 10s confirm for unit test
+    engine.config().baselineMinSamples = 20U;
+    engine.assignNodeSlot(0x110011U, rules::SLOT_TRACTOR_A1);
+
+    uint32_t t = 1000;
+    // Phase 1: 25 seconds of healthy quiet Santa Fe driving (~0.45 mm/s, kurtosis ~3.0, HF ~0.24)
+    for (int i = 0; i < 25; ++i) {
+        t += 1000;
+        const float jitter = (i % 2 == 0) ? 0.03f : -0.03f;
+        can2::AxleTelemetry ax{};
+        ax.nodeId        = 0x110011U;
+        ax.tempLeftC     = 31.0f;
+        ax.tempRightC    = 31.2f;
+        ax.vibRmsLeft    = 0.45f + jitter;
+        ax.vibRmsRight   = 0.46f - jitter;
+        ax.vibPeakLeft   = 1.2f;
+        ax.vibPeakRight  = 1.2f;
+        ax.crestLeft     = 2.6f;
+        ax.crestRight    = 2.6f;
+        ax.kurtosisLeft  = 3.0f;
+        ax.kurtosisRight = 3.1f;
+        ax.hfEnergyLeft  = 0.24f;
+        ax.hfEnergyRight = 0.25f;
+        engine.onAxleTelemetry(ax, false, t);
+        auto trig = engine.update(t);
+        TEST_ASSERT_FALSE(trig.triggered);
+        TEST_ASSERT_EQUAL_UINT8(rules::SEV_GREEN, engine.indicator().driverSeverity);
+    }
+
+    // Auto-Baseline must now be ready on both front wheels!
+    TEST_ASSERT_TRUE(engine.nodes()[0].baseLeft.ready);
+    TEST_ASSERT_TRUE(engine.nodes()[0].baseRight.ready);
+
+    // Phase 2: Early bearing wear on T1-R -> only 1.15 mm/s (3x BELOW truck 3.5 mm/s threshold!),
+    // with kurtosis=6.2, hfEnergy=0.62, Z-score ~4.9 -> MUST trigger YELLOW on T1-R!
+    bool detectedYellow = false;
+    for (int i = 0; i < 12; ++i) {
+        t += 1000;
+        can2::AxleTelemetry ax{};
+        ax.nodeId        = 0x110011U;
+        ax.tempLeftC     = 32.0f;
+        ax.tempRightC    = 36.0f; // Only +4°C delta (not a thermal alert yet)
+        ax.vibRmsLeft    = 0.46f;
+        ax.vibRmsRight   = 1.15f; // 3x below truck 3.5 mm/s!
+        ax.vibPeakLeft   = 1.2f;
+        ax.vibPeakRight  = 3.8f;
+        ax.crestLeft     = 2.6f;
+        ax.crestRight    = 3.3f;
+        ax.kurtosisLeft  = 3.0f;
+        ax.kurtosisRight = 6.2f;
+        ax.hfEnergyLeft  = 0.24f;
+        ax.hfEnergyRight = 0.62f;
+        engine.onAxleTelemetry(ax, false, t);
+        auto evt = engine.update(t);
+        if (evt.triggered && evt.severity == rules::SEV_YELLOW) {
+            detectedYellow = true;
+            TEST_ASSERT_EQUAL_STRING("T1-R", evt.wheelCode);
+        }
+    }
+
+    TEST_ASSERT_TRUE(detectedYellow);
+    TEST_ASSERT_EQUAL_UINT8(rules::SEV_YELLOW, engine.indicator().driverSeverity);
+    TEST_ASSERT_EQUAL_STRING("T1-R", engine.indicator().wheelCode);
+
+    // Phase 3: Severe spall progression (1.85 mm/s -> Z-score ~9.9, still below truck 3.5 mm/s!) -> RED + buzzer!
+    bool detectedRed = false;
+    for (int i = 0; i < 7; ++i) {
+        t += 1000;
+        can2::AxleTelemetry ax{};
+        ax.nodeId        = 0x110011U;
+        ax.tempLeftC     = 32.0f;
+        ax.tempRightC    = 40.0f;
+        ax.vibRmsLeft    = 0.46f;
+        ax.vibRmsRight   = 1.85f;
+        ax.vibPeakLeft   = 1.2f;
+        ax.vibPeakRight  = 6.4f;
+        ax.crestLeft     = 2.6f;
+        ax.crestRight    = 3.45f;
+        ax.kurtosisLeft  = 3.0f;
+        ax.kurtosisRight = 7.5f;
+        ax.hfEnergyLeft  = 0.24f;
+        ax.hfEnergyRight = 0.72f;
+        engine.onAxleTelemetry(ax, false, t);
+        auto evt = engine.update(t);
+        if (evt.triggered && evt.severity == rules::SEV_RED) {
+            detectedRed = true;
+            TEST_ASSERT_EQUAL_STRING("T1-R", evt.wheelCode);
+        }
+    }
+    TEST_ASSERT_TRUE(detectedRed);
+    TEST_ASSERT_EQUAL_UINT8(rules::SEV_RED, engine.indicator().driverSeverity);
+    TEST_ASSERT_TRUE(engine.indicator().buzzerOn);
+}
+
 int main(int argc, char** argv) {
     UNITY_BEGIN();
     RUN_TEST(test_c3_edge_dsp_256pt_fft_1000hz_sine);
@@ -273,5 +397,7 @@ int main(int argc, char** argv) {
     RUN_TEST(test_rule_engine_sustained_delta_temp_yellow_after_60s_with_wheel_code);
     RUN_TEST(test_rule_engine_shadow_mode_and_remote_json_config);
     RUN_TEST(test_black_box_ring_buffer_and_ingest_json_contract);
+    RUN_TEST(test_can_v2_ml_features_roundtrip);
+    RUN_TEST(test_crossover_auto_baseline_zscore_and_kurtosis_detects_low_rms_bearing_fault);
     return UNITY_END();
 }

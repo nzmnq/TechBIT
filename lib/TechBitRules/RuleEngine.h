@@ -37,6 +37,17 @@ inline void formatWheelCode(WheelSlot slot, bool isRightWheel, char out[8]) {
     }
 }
 
+// Per-wheel online Welford Auto-Baseline (learns each vehicle's own healthy noise norm,
+// solving the Crossover [Hyundai Santa Fe] vs 40t Truck Domain Shift problem!)
+struct WheelBaseline {
+    uint32_t samples;
+    float    meanRms;
+    float    m2Rms;
+    float    stdRms;
+    float    lastZScore;
+    bool     ready;
+};
+
 struct TrackedAxleNode {
     bool              used;
     bool              online;
@@ -45,6 +56,10 @@ struct TrackedAxleNode {
     uint32_t          uptimeSec;
     WheelSlot         slot;
     can2::AxleTelemetry telemetry;
+
+    // Online Auto-Baseline per wheel (L & R)
+    WheelBaseline     baseLeft;
+    WheelBaseline     baseRight;
 
     // Sustained rule accumulation
     uint32_t          yellowAccumMs;
@@ -66,19 +81,19 @@ struct BurstTriggerEvent {
 
 struct CabinIndicatorState {
     AlertSeverity driverSeverity; // NEVER equals SEV_SHADOW (keeps driver calm)
-    char          wheelCode[8];   // e.g. "P2-L" or "OK"
+    char          wheelCode[8];   // e.g. "T1-R", "P2-L", or "OK"
     bool          buzzerOn;
     uint8_t       activeNodeCount;
     uint8_t       offlineNodeCount;
 };
 
-// Rule-Based Multi-Axle Evaluator & Black Box Trigger Controller (Software Spec 3.3).
-// 100% pure C++17 — runs identically on ESP32-S3 Master and host native_test.
+// Domain-Invariant Rule & Auto-Baseline Evaluator (C++17, zero heap allocation).
 class RuleEngine {
 public:
     RuleEngine();
 
     void init();
+    void resetBaselines();
     void setAssetIds(const char* tractorId, const char* trailerId);
     const char* tractorId() const { return tractorId_; }
     const char* trailerId() const { return trailerId_; }
@@ -86,15 +101,12 @@ public:
     RuleConfig& config() { return cfg_; }
     const RuleConfig& config() const { return cfg_; }
 
-    // Pair/map hardware MAC node_id to physical axle slot (via BLE Service Mode or NVS)
     bool assignNodeSlot(uint32_t nodeId, WheelSlot slot);
 
-    // Ingest telemetry from Tractor CAN or Trailer ESP-NOW Bridge
     void onAxleTelemetry(const can2::AxleTelemetry& t, bool fromTrailer, uint32_t nowMs);
     void onNodeHeartbeat(const can2::NodeHeartbeat& hb, bool fromTrailer, uint32_t nowMs);
     void onTrailerEspNowPacket(const espnow2::TrailerTelemetryPacket& pkt, uint32_t nowMs);
 
-    // Evaluate all online nodes and return BurstTriggerEvent if cloud upload is needed
     BurstTriggerEvent update(uint32_t nowMs);
 
     const CabinIndicatorState& indicator() const { return indicator_; }
@@ -102,7 +114,8 @@ public:
     const TrackedAxleNode* nodes() const { return nodes_; }
 
 private:
-    int findOrCreateNode(uint32_t nodeId);
+    int  findOrCreateNode(uint32_t nodeId);
+    void updateWheelBaseline(WheelBaseline& b, float rms, bool allowLearn);
 
     RuleConfig          cfg_;
     char                tractorId_[16];

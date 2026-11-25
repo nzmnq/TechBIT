@@ -46,7 +46,7 @@ int findOrAddNode(uint32_t nodeId) {
         if (!g_nodes[i].used && freeIdx < 0) freeIdx = i;
     }
     if (freeIdx >= 0) {
-        std::memset(&g_nodes[freeIdx], 0, sizeof(TrailerNodeCache));
+        g_nodes[freeIdx]             = TrailerNodeCache{};
         g_nodes[freeIdx].used        = true;
         g_nodes[freeIdx].data.nodeId = nodeId;
     }
@@ -173,6 +173,8 @@ void loop() {
         g_nodes[idx].lastRxMs = nowMs;
         if (type == can2::MSG_AXLE_VIB) {
             can2::unpackAxleVibFrame(rx.data, g_nodes[idx].data);
+        } else if (type == can2::MSG_AXLE_ML_FEATURES) {
+            can2::unpackAxleMlFeaturesFrame(rx.data, g_nodes[idx].data);
         } else if (type == can2::MSG_AXLE_TEMP_META) {
             can2::unpackAxleTempFrame(rx.data, g_nodes[idx].data);
         }
