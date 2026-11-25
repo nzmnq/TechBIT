@@ -42,6 +42,8 @@ export const REASON_LABELS = {
   NORMAL: 'Норма',
   TEMP_CRITICAL_BRAKE: 'Критичний перегрів гальма',
   TEMP_DELTA_HIGH: 'Перевищення ΔT на осі',
+  ML_BEARING_IMPULSE: 'ML: Імпульси підшипника (Kurt+HF)',
+  BASELINE_ZSCORE_DRIFT: 'Відхилення від норми авто (Z-score)',
   VIB_ANOMALY_LOCAL: 'Локальна вібрація вузла',
   COBBLESTONE_FILTERED: 'Фільтр бруківки',
   POTHOLE_GUARD: 'Фільтр удару в яму',

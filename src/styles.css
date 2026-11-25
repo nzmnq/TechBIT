@@ -334,6 +334,14 @@ svg.ico * {
   border-radius: 6px;
 }
 
+.nav-rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--red);
+  box-shadow: 0 0 10px oklch(0.66 0.24 12 / 0.95);
+}
+
 .topbar-meta {
   display: flex;
   align-items: center;
@@ -2048,6 +2056,119 @@ canvas {
   font-weight: 700;
 }
 
+/* ==========================================================================
+   Page 4: ML Dataset Recorder & Auto-Baseline Monitor
+   ========================================================================== */
+.baseline-pair-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.baseline-card {
+  background: var(--bg-well);
+  border-radius: 9px;
+  padding: 11px 12px;
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-well);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.baseline-card[data-tone="cyan"] {
+  box-shadow: 0 0 0 1px oklch(0.84 0.16 205 / 0.34), inset 0 2px 0 var(--cyan);
+}
+
+.baseline-card[data-tone="rose"] {
+  box-shadow: 0 0 0 1px oklch(0.7 0.22 355 / 0.36), inset 0 2px 0 var(--rose);
+}
+
+.baseline-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.baseline-bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.08);
+  overflow: hidden;
+}
+
+.baseline-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+  transition-property: width;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-ui);
+}
+
+.baseline-bar-fill[data-tone="rose"] {
+  background: var(--rose);
+}
+
+.baseline-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.baseline-stats-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.baseline-stats-grid strong {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.rec-live-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--bg-well);
+  border-radius: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-structural);
+}
+
+.rec-speed-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rec-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ml-cmd-callout {
+  background: #09071a;
+  border: 1px solid var(--border-structural);
+  border-radius: 9px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ml-cmd-callout code {
+  color: var(--cyan);
+  font-size: 12px;
+}
+
 @media (hover: hover) {
   .pin-table tbody tr:hover {
     background: oklch(1 0 0 / 0.04);
@@ -2084,7 +2205,8 @@ canvas {
   }
 
   .blackbox-grid,
-  .config-grid {
+  .config-grid,
+  .baseline-pair-grid {
     grid-template-columns: 1fr;
   }
 }

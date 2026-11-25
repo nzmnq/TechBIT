@@ -1,9 +1,12 @@
 'use strict';
 
 // ============================================================================
-// TechBIT v2.2 Diagnostics & Rule Engine (JavaScript Parity with C++ RuleEngine)
-// Per-module sensor configuration for MVP bench (Front Left, Front Right, S3 Master)
-// plus expandable Truck (4 wheels) and Full Coupling (10 wheels + ESP-NOW Bridge).
+// TechBIT v2.3 Diagnostics & Domain-Invariant ML Rule Engine
+// Exact JavaScript parity with C++ RuleEngine.cpp (esp-code):
+//   - Per-module sensor configuration (Front Left T1-L, Front Right T1-R, S3 Master)
+//   - Domain-invariant ML features: kurtosis, hfEnergy (600..4500 Hz), tonality, bandLow
+//   - Per-wheel online Welford Auto-Baseline -> Z-score (solves Hyundai Santa Fe vs 40t Truck!)
+//   - Vehicle class selector: 'crossover' (Hyundai Santa Fe MVP default) | 'truck' (40t)
 // ============================================================================
 
 const RIG_PROFILES = {
@@ -33,17 +36,18 @@ const RIG_PROFILES = {
   },
 };
 
+const VEHICLE_CLASSES = ['crossover', 'truck'];
 const TEMP_SENSOR_TYPES = ['sht40', 'ntc', 'dual'];
 const VIB_SENSOR_TYPES = ['piezo_mcp6002', 'piezo_direct', 'mems_imu'];
 const S3_MODES = ['s3_can_lte_led', 's3_usb_bench', 's3_ble_bridge'];
 const S3_LINKS = ['can_500k', 'usb_direct', 'wifi_push'];
 
 const AXLE_SLOTS = [
-  { slot: 1, key: 'T1', asset: 'tractor', axleNum: 1, label: 'Тягач • Передня вісь', codeL: 'T1-L', codeR: 'T1-R' },
-  { slot: 2, key: 'T2', asset: 'tractor', axleNum: 2, label: 'Тягач • Задня вісь',   codeL: 'T2-L', codeR: 'T2-R' },
-  { slot: 3, key: 'P1', asset: 'trailer', axleNum: 1, label: 'Причеп • Вісь 1',       codeL: 'P1-L', codeR: 'P1-R' },
-  { slot: 4, key: 'P2', asset: 'trailer', axleNum: 2, label: 'Причеп • Вісь 2',       codeL: 'P2-L', codeR: 'P2-R' },
-  { slot: 5, key: 'P3', asset: 'trailer', axleNum: 3, label: 'Причеп • Вісь 3',       codeL: 'P3-L', codeR: 'P3-R' },
+  { slot: 1, key: 'T1', asset: 'tractor', axleNum: 1, label: 'Передня вісь (T1)', codeL: 'T1-L', codeR: 'T1-R' },
+  { slot: 2, key: 'T2', asset: 'tractor', axleNum: 2, label: 'Задня вісь (T2)',   codeL: 'T2-L', codeR: 'T2-R' },
+  { slot: 3, key: 'P1', asset: 'trailer', axleNum: 1, label: 'Причеп • Вісь 1',   codeL: 'P1-L', codeR: 'P1-R' },
+  { slot: 4, key: 'P2', asset: 'trailer', axleNum: 2, label: 'Причеп • Вісь 2',   codeL: 'P2-L', codeR: 'P2-R' },
+  { slot: 5, key: 'P3', asset: 'trailer', axleNum: 3, label: 'Причеп • Вісь 3',   codeL: 'P3-L', codeR: 'P3-R' },
 ];
 
 function createDefaultModuleSensors() {
@@ -56,6 +60,7 @@ function createDefaultModuleSensors() {
 
 const DEFAULT_CONFIG = {
   rigProfile: 'mvp_front',
+  vehicleClass: 'crossover', // Hyundai Santa Fe MVP default; switchable to 'truck'
   tempSensorType: 'sht40',
   vibSensorType: 'piezo_mcp6002',
   moduleSensors: createDefaultModuleSensors(),
@@ -67,6 +72,12 @@ const DEFAULT_CONFIG = {
   vibCritRmsMmS: 6.5,
   vibDeltaRatioWarn: 2.2,
   shadowVibRatio: 1.65,
+  kurtosisWarn: 5.5,
+  hfEnergyWarn: 0.56,
+  zScoreWarn: 3.5,
+  zScoreCrit: 6.0,
+  baselineMinSamples: 25,
+  autoBaselineEnabled: true,
   yellowConfirmSec: 60,
   redConfirmSec: 5,
   shadowModeEnabled: true,
@@ -76,6 +87,17 @@ const DEFAULT_CONFIG = {
   humidityWarnPct: 85.0,
   configVersion: 1,
 };
+
+function createEmptyBaseline() {
+  return {
+    samples: 0,
+    meanRms: 0,
+    m2Rms: 0,
+    stdRms: 0,
+    lastZScore: 0,
+    ready: false,
+  };
+}
 
 function createEmptySide(code, side) {
   return {
@@ -87,8 +109,12 @@ function createEmptySide(code, side) {
     rmsMmS: 0,
     peakMmS: 0,
     crest: 1.0,
+    kurtosis: 3.0,
+    hfEnergy: 0.25,
+    bandLow: 0.5,
+    tonality: 1.0,
     dcOffsetMv: null,
-    vrefStatus: 'UNKNOWN', // 'OK' | 'FAULT' | 'NA' | 'UNKNOWN'
+    vrefStatus: 'UNKNOWN',
     fDomHz: 0,
     clip: false,
     tempC: null,
@@ -96,6 +122,7 @@ function createEmptySide(code, side) {
     shtOk: false,
     humidityWarn: false,
     spectrum: new Array(32).fill(0),
+    baseline: createEmptyBaseline(),
     severity: 'OFFLINE',
   };
 }
@@ -115,6 +142,7 @@ function createEmptyAxle(def) {
     left: createEmptySide(def.codeL, 'L'),
     right: createEmptySide(def.codeR, 'R'),
     tempDeltaC: 0,
+    vibRatio: 1.0,
     yellowAccumMs: 0,
     redAccumMs: 0,
     yellowLatched: false,
@@ -140,6 +168,33 @@ function makeUuid(ts, nodeStr, seq) {
   return `${h1}-${h2}-${h3}-${h4}-${tag}`;
 }
 
+function deriveBandsFromSpectrum(spectrum) {
+  if (!Array.isArray(spectrum) || spectrum.length !== 32) {
+    return { bandLow: 0.5, hfEnergy: 0.25, tonality: 1.0 };
+  }
+  let lowP = 0;
+  let hfP = 0;
+  let sumMag = 0;
+  let maxMag = 0;
+  for (let b = 0; b < 32; b++) {
+    const m = Math.max(0, Number(spectrum[b]) || 0);
+    const p = m * m;
+    const fCenter = b * 140 + 70;
+    if (fCenter < 600) lowP += p;
+    else hfP += p;
+    sumMag += m;
+    if (m > maxMag) maxMag = m;
+  }
+  const tot = lowP + hfP;
+  const meanMag = sumMag / 32;
+  if (tot <= 1e-6) return { bandLow: 0.5, hfEnergy: 0.25, tonality: 1.0 };
+  return {
+    bandLow: Number((lowP / tot).toFixed(3)),
+    hfEnergy: Number((hfP / tot).toFixed(3)),
+    tonality: Number((meanMag > 1e-4 ? maxMag / meanMag : 1.0).toFixed(2)),
+  };
+}
+
 class TechBitV2Engine {
   constructor(initialConfig = {}) {
     this.config = {
@@ -160,9 +215,8 @@ class TechBitV2Engine {
         },
       },
     };
-    if (!RIG_PROFILES[this.config.rigProfile]) {
-      this.config.rigProfile = 'mvp_front';
-    }
+    if (!RIG_PROFILES[this.config.rigProfile]) this.config.rigProfile = 'mvp_front';
+    if (!VEHICLE_CLASSES.includes(this.config.vehicleClass)) this.config.vehicleClass = 'crossover';
     this.reset();
   }
 
@@ -186,7 +240,7 @@ class TechBitV2Engine {
   reset() {
     this.lastUpdateMs = 0;
     this.eventSeq = 0;
-    this.tractorId = 'TR_001';
+    this.tractorId = this.config.vehicleClass === 'crossover' ? 'SANTA_FE_MVP' : 'TR_001';
     this.trailerId = 'TL_042';
     this.deviceId = 'S3_MASTER_MVP';
 
@@ -235,6 +289,19 @@ class TechBitV2Engine {
     this.incidents = [];
   }
 
+  resetBaselines() {
+    for (const ax of this.axles) {
+      ax.left.baseline = createEmptyBaseline();
+      ax.right.baseline = createEmptyBaseline();
+      ax.yellowAccumMs = 0;
+      ax.redAccumMs = 0;
+      ax.yellowLatched = false;
+      ax.redLatched = false;
+      ax.shadowTriggered = false;
+      ax.lastReason = 'NORMAL';
+    }
+  }
+
   updateConfig(patch) {
     if (!patch || typeof patch !== 'object') return this.config;
     const numKeys = [
@@ -246,6 +313,11 @@ class TechBitV2Engine {
       'vibCritRmsMmS',
       'vibDeltaRatioWarn',
       'shadowVibRatio',
+      'kurtosisWarn',
+      'hfEnergyWarn',
+      'zScoreWarn',
+      'zScoreCrit',
+      'baselineMinSamples',
       'yellowConfirmSec',
       'redConfirmSec',
       'nodeTimeoutMs',
@@ -260,7 +332,13 @@ class TechBitV2Engine {
       changed = true;
     }
 
-    // Global fallbacks also mirror to frontLeft/frontRight if moduleSensors not explicitly passed
+    if (patch.vehicleClass && VEHICLE_CLASSES.includes(patch.vehicleClass) && patch.vehicleClass !== this.config.vehicleClass) {
+      this.config.vehicleClass = patch.vehicleClass;
+      this.tractorId = patch.vehicleClass === 'crossover' ? 'SANTA_FE_MVP' : 'TR_001';
+      this.resetBaselines();
+      changed = true;
+    }
+
     if (patch.tempSensorType && TEMP_SENSOR_TYPES.includes(patch.tempSensorType)) {
       if (patch.tempSensorType !== this.config.tempSensorType) changed = true;
       this.config.tempSensorType = patch.tempSensorType;
@@ -278,7 +356,6 @@ class TechBitV2Engine {
       }
     }
 
-    // Per-module sensor selection (Front Left T1-L, Front Right T1-R, S3 Master)
     if (patch.moduleSensors && typeof patch.moduleSensors === 'object') {
       const ms = patch.moduleSensors;
       if (ms.frontLeft) {
@@ -323,6 +400,10 @@ class TechBitV2Engine {
       if (this.config.shadowModeEnabled !== patch.shadowModeEnabled) changed = true;
       this.config.shadowModeEnabled = patch.shadowModeEnabled;
     }
+    if (typeof patch.autoBaselineEnabled === 'boolean') {
+      if (this.config.autoBaselineEnabled !== patch.autoBaselineEnabled) changed = true;
+      this.config.autoBaselineEnabled = patch.autoBaselineEnabled;
+    }
 
     if (changed) {
       this.config.configVersion += 1;
@@ -353,9 +434,7 @@ class TechBitV2Engine {
       return { slot, sideOnly: wheelMatch[3] };
     }
     const num = Number(slotOverride);
-    if (num >= 1 && num <= 5) {
-      return { slot: num, sideOnly: null };
-    }
+    if (num >= 1 && num <= 5) return { slot: num, sideOnly: null };
     return { slot: null, sideOnly: null };
   }
 
@@ -369,11 +448,7 @@ class TechBitV2Engine {
       return this.nodeIdToSlot.get(String(nodeId));
     }
     const profileSlots = this.getProfileMeta().slots;
-    const range = fromTrailer
-      ? [3, 4, 5]
-      : profileSlots.length > 0
-        ? profileSlots
-        : [1, 2, 3, 4, 5];
+    const range = fromTrailer ? [3, 4, 5] : profileSlots.length > 0 ? profileSlots : [1, 2, 3, 4, 5];
     for (const s of range) {
       const ax = this.axles[s - 1];
       if (!ax.nodeId || ax.nodeId === nodeId) {
@@ -418,9 +493,17 @@ class TechBitV2Engine {
     targetSide.tempC = src.tempC !== undefined ? Number(src.tempC) : null;
     targetSide.rh = src.rh !== undefined ? Number(src.rh) : null;
     targetSide.shtOk = Boolean(src.shtOk);
+
     if (Array.isArray(src.spectrum) && src.spectrum.length === 32) {
       targetSide.spectrum = src.spectrum.map((v) => Number(v) || 0);
     }
+
+    const derived = deriveBandsFromSpectrum(targetSide.spectrum);
+    targetSide.kurtosis = Number(src.kurtosis ?? 3.0);
+    targetSide.hfEnergy = Number(src.hfEnergy ?? derived.hfEnergy);
+    targetSide.bandLow = Number(src.bandLow ?? derived.bandLow);
+    targetSide.tonality = Number(src.tonality ?? derived.tonality);
+
     this.evaluateSideHardware(targetSide);
   }
 
@@ -506,6 +589,8 @@ class TechBitV2Engine {
                 tempC: n.tL,
                 shtOk: true,
                 fDomHz: n.fL || 0,
+                kurtosis: n.kL ?? 3.0,
+                hfEnergy: n.hfL ?? 0.25,
               },
               right: {
                 rmsMmS: n.vR,
@@ -513,6 +598,8 @@ class TechBitV2Engine {
                 tempC: n.tR,
                 shtOk: true,
                 fDomHz: n.fR || 0,
+                kurtosis: n.kR ?? 3.0,
+                hfEnergy: n.hfR ?? 0.25,
               },
             },
             nowMs
@@ -531,6 +618,7 @@ class TechBitV2Engine {
         rmsMmS: Number(((pkt.rmsMv ?? 0) * 0.045).toFixed(2)),
         peakMmS: Number(((pkt.peakMv ?? 0) * 0.045).toFixed(2)),
         crest: Number(pkt.crestFactor ?? 2.6),
+        kurtosis: Number(pkt.kurtosis ?? 3.0),
         dcOffsetMv: pkt.dcOffsetMv !== undefined ? Number(pkt.dcOffsetMv) : null,
         fDomHz: Number(pkt.dominantFreqHz ?? 0),
         clip: Boolean(pkt.surgeClipping),
@@ -563,10 +651,12 @@ class TechBitV2Engine {
       tR: ax.right.tempC,
       vL: ax.left.rmsMmS,
       vR: ax.right.rmsMmS,
+      kL: ax.left.kurtosis,
+      kR: ax.right.kurtosis,
+      hfL: ax.left.hfEnergy,
+      hfR: ax.right.hfEnergy,
     });
-    if (this.blackBoxRing.length > 240) {
-      this.blackBoxRing.shift();
-    }
+    if (this.blackBoxRing.length > 240) this.blackBoxRing.shift();
   }
 
   recordBurstEvent(ax, severity, wheelCode, reason, nowMs) {
@@ -580,7 +670,9 @@ class TechBitV2Engine {
         slot: a.key,
         temp_c: Number(Math.max(a.left.tempC ?? 0, a.right.tempC ?? 0).toFixed(1)),
         vib_rms: Number(Math.max(a.left.rmsMmS, a.right.rmsMmS).toFixed(2)),
-        vib_peak: Number(Math.max(a.left.peakMmS, a.right.peakMmS).toFixed(1)),
+        kurtosis: Number(Math.max(a.left.kurtosis, a.right.kurtosis).toFixed(2)),
+        hf_energy: Number(Math.max(a.left.hfEnergy, a.right.hfEnergy).toFixed(3)),
+        z_score: Number(Math.max(a.left.baseline.lastZScore, a.right.baseline.lastZScore).toFixed(2)),
       }));
 
     const sliceJson = JSON.stringify(this.blackBoxRing.slice(-16));
@@ -590,6 +682,7 @@ class TechBitV2Engine {
       protocol_version: 1,
       device_id: this.deviceId,
       timestamp_utc: tsUtc,
+      vehicle_class: this.config.vehicleClass,
       tractor_id: this.tractorId,
       trailer_id: this.getProfileMeta().hasBridge ? this.trailerId : null,
       rig_profile: this.config.rigProfile,
@@ -600,7 +693,7 @@ class TechBitV2Engine {
       trigger_node_id: ax.nodeId,
       wheel_code: wheelCode,
       trigger_reason: reason,
-      firmware_version: '2.2.0-mvp',
+      firmware_version: '2.3.0-ml-mvp',
       config_version: this.config.configVersion,
       summary,
       burst_samples_base64: burstB64,
@@ -609,6 +702,7 @@ class TechBitV2Engine {
     this.burstEvents.unshift(packet);
     if (this.burstEvents.length > 25) this.burstEvents.pop();
 
+    const hotObj = ax.hotSide === 'R' ? ax.right : ax.left;
     const ticket = {
       ticket_id: `TKT-${String(this.eventSeq).padStart(3, '0')}`,
       event_id: eventId,
@@ -617,9 +711,12 @@ class TechBitV2Engine {
       axle_label: ax.label,
       severity,
       reason,
-      temp_c: Number((ax.hotSide === 'R' ? ax.right.tempC : ax.left.tempC) ?? 0),
+      temp_c: Number((hotObj.tempC ?? 0).toFixed(1)),
       temp_delta_c: Number(ax.tempDeltaC.toFixed(1)),
-      vib_rms: Number((ax.hotSide === 'R' ? ax.right.rmsMmS : ax.left.rmsMmS).toFixed(2)),
+      vib_rms: Number(hotObj.rmsMmS.toFixed(2)),
+      kurtosis: Number(hotObj.kurtosis.toFixed(2)),
+      hf_energy: Number(hotObj.hfEnergy.toFixed(3)),
+      z_score: Number(hotObj.baseline.lastZScore.toFixed(2)),
       status: severity === 'SHADOW' ? 'CLOSED' : 'OPEN',
       resolution_code: severity === 'SHADOW' ? 'SHADOW_OBSERVATION' : null,
       resolved_at_utc: severity === 'SHADOW' ? tsUtc : null,
@@ -656,6 +753,43 @@ class TechBitV2Engine {
     return this.s3Master.buzzerMuted;
   }
 
+  updateWheelBaseline(b, rms, allowLearn) {
+    const stdFloor = this.config.vehicleClass === 'crossover' ? 0.14 : 0.30;
+
+    if (b.ready) {
+      const denom = Math.max(b.stdRms, stdFloor);
+      b.lastZScore = Number(((rms - b.meanRms) / denom).toFixed(2));
+    } else {
+      b.lastZScore = 0;
+    }
+
+    if (!this.config.autoBaselineEnabled || !allowLearn || rms < 0.08) return;
+    if (b.ready && b.lastZScore >= this.config.zScoreWarn * 0.75) return;
+
+    if (b.samples < 600) {
+      b.samples += 1;
+      const delta = rms - b.meanRms;
+      b.meanRms += delta / b.samples;
+      const delta2 = rms - b.meanRms;
+      b.m2Rms += delta * delta2;
+      if (b.samples >= 2) {
+        b.stdRms = Math.sqrt(b.m2Rms / (b.samples - 1));
+      }
+    } else {
+      const alpha = 0.002;
+      const diff = rms - b.meanRms;
+      b.meanRms += alpha * diff;
+      const variance = (1 - alpha) * (b.stdRms * b.stdRms) + alpha * (diff * diff);
+      b.stdRms = Math.sqrt(Math.max(variance, 0.0001));
+    }
+
+    if (b.samples >= this.config.baselineMinSamples) {
+      b.ready = true;
+      const denom = Math.max(b.stdRms, stdFloor);
+      b.lastZScore = Number(((rms - b.meanRms) / denom).toFixed(2));
+    }
+  }
+
   update(nowMs = Date.now()) {
     const dtMs =
       this.lastUpdateMs === 0 || nowMs < this.lastUpdateMs
@@ -664,6 +798,7 @@ class TechBitV2Engine {
     this.lastUpdateMs = nowMs;
 
     const profile = this.getProfileMeta();
+    const isCrossover = this.config.vehicleClass === 'crossover';
     let activeAxles = 0;
     let activeWheels = 0;
     let offlineAxles = 0;
@@ -705,21 +840,21 @@ class TechBitV2Engine {
       this.s3Master.online = nowMs - this.s3Master.lastRxMs <= this.config.nodeTimeoutMs;
     }
 
-    const fleetMeanVib = activeAxles > 0 ? Math.max(0.8, vibSum / activeAxles) : 1.0;
+    const fleetFloor = isCrossover ? 0.30 : 0.80;
+    const fleetMeanVib = activeAxles > 0 ? Math.max(fleetFloor, vibSum / activeAxles) : 1.0;
+    const roughThresh = isCrossover ? Math.min(this.config.vibWarnRmsMmS, 2.4) : this.config.vibWarnRmsMmS;
 
     let roughCount = 0;
     for (const ax of this.axles) {
       if (!ax.online || !profile.slots.includes(ax.slot)) continue;
       if (ax.left.online && ax.right.online) {
-        const minV = Math.max(0.6, Math.min(ax.left.rmsMmS, ax.right.rmsMmS));
+        const minV = Math.max(fleetFloor, Math.min(ax.left.rmsMmS, ax.right.rmsMmS));
         const maxV = Math.max(ax.left.rmsMmS, ax.right.rmsMmS);
-        if (0.5 * (ax.left.rmsMmS + ax.right.rmsMmS) >= this.config.vibWarnRmsMmS) {
-          roughCount += 1;
-        }
+        if (0.5 * (ax.left.rmsMmS + ax.right.rmsMmS) >= roughThresh) roughCount += 1;
         if (
           activeAxles === 1 &&
-          ax.left.rmsMmS >= this.config.vibWarnRmsMmS &&
-          ax.right.rmsMmS >= this.config.vibWarnRmsMmS &&
+          ax.left.rmsMmS >= roughThresh &&
+          ax.right.rmsMmS >= roughThresh &&
           maxV / minV < 1.35
         ) {
           roughCount = 2;
@@ -748,30 +883,70 @@ class TechBitV2Engine {
         rightIsHot = true;
       } else if (ax.left.online && !ax.right.online) {
         rightIsHot = false;
+      } else if (tempDelta >= 3.0) {
+        rightIsHot = tR > tL;
+      } else if (ax.right.clip && !ax.left.clip) {
+        rightIsHot = true;
+      } else if (ax.left.clip && !ax.right.clip) {
+        rightIsHot = false;
       } else {
-        rightIsHot =
-          tempDelta >= 3.0
-            ? tR > tL
-            : (ax.right.clip && !ax.left.clip) ||
-              (!ax.left.clip && ax.right.rmsMmS > ax.left.rmsMmS);
+        const scoreL = ax.left.rmsMmS + (ax.left.kurtosis >= this.config.kurtosisWarn ? 1.5 : 0);
+        const scoreR = ax.right.rmsMmS + (ax.right.kurtosis >= this.config.kurtosisWarn ? 1.5 : 0);
+        rightIsHot = scoreR > scoreL;
       }
 
       ax.hotSide = rightIsHot ? 'R' : 'L';
       const hotObj = rightIsHot ? ax.right : ax.left;
       const coldObj = rightIsHot ? ax.left : ax.right;
 
+      const minSideFloor = isCrossover ? 0.25 : 0.60;
       const minSideVib = bothOnline
-        ? Math.max(0.6, Math.min(ax.left.rmsMmS, ax.right.rmsMmS))
+        ? Math.max(minSideFloor, Math.min(ax.left.rmsMmS, ax.right.rmsMmS))
         : 1.0;
       const maxSideVib = hotObj.rmsMmS;
       const sideRatio = maxSideVib / minSideVib;
       const peerRatio = maxSideVib / fleetMeanVib;
+      ax.vibRatio = Number(sideRatio.toFixed(2));
 
-      const transientPothole = (hotObj.crest >= 4.2 || hotObj.clip) && tempDelta < 10.0;
+      const transientPothole =
+        (hotObj.crest >= 4.2 || hotObj.clip) &&
+        tempDelta < 10.0 &&
+        hotObj.hfEnergy < this.config.hfEnergyWarn;
+
+      const calmFrame = !transientPothole && !roughRoadAllWheels && tempDelta < 12.0;
+      if (ax.left.online) this.updateWheelBaseline(ax.left.baseline, ax.left.rmsMmS, calmFrame && sideRatio < 1.55);
+      if (ax.right.online) this.updateWheelBaseline(ax.right.baseline, ax.right.rmsMmS, calmFrame && sideRatio < 1.55);
+
+      const hotZ = hotObj.baseline.ready ? hotObj.baseline.lastZScore : 0;
+
+      const mlBearingImpulse =
+        !transientPothole &&
+        !roughRoadAllWheels &&
+        hotObj.kurtosis >= this.config.kurtosisWarn &&
+        hotObj.hfEnergy >= this.config.hfEnergyWarn &&
+        (sideRatio >= 1.45 || hotZ >= 2.5);
+
+      const baselineDriftWarn =
+        this.config.autoBaselineEnabled &&
+        hotObj.baseline.ready &&
+        !transientPothole &&
+        !roughRoadAllWheels &&
+        hotZ >= this.config.zScoreWarn &&
+        (sideRatio >= 1.5 || hotObj.hfEnergy >= this.config.hfEnergyWarn || hotObj.kurtosis >= 4.5);
+
+      const baselineDriftCrit =
+        this.config.autoBaselineEnabled &&
+        hotObj.baseline.ready &&
+        !transientPothole &&
+        !roughRoadAllWheels &&
+        hotZ >= this.config.zScoreCrit &&
+        sideRatio >= this.config.vibDeltaRatioWarn &&
+        (hotObj.kurtosis >= this.config.kurtosisWarn || hotObj.hfEnergy >= this.config.hfEnergyWarn);
 
       const redCond =
         maxTemp >= this.config.tempCritC ||
         tempDelta >= this.config.axleTempDeltaCritC ||
+        baselineDriftCrit ||
         (!transientPothole &&
           !roughRoadAllWheels &&
           maxSideVib >= this.config.vibCritRmsMmS &&
@@ -781,6 +956,8 @@ class TechBitV2Engine {
         redCond ||
         maxTemp >= this.config.tempWarnC ||
         tempDelta >= this.config.axleTempDeltaWarnC ||
+        mlBearingImpulse ||
+        baselineDriftWarn ||
         (!transientPothole &&
           !roughRoadAllWheels &&
           maxSideVib >= this.config.vibWarnRmsMmS &&
@@ -793,7 +970,8 @@ class TechBitV2Engine {
         !roughRoadAllWheels &&
         (bothOnline
           ? sideRatio >= this.config.shadowVibRatio ||
-            tempDelta >= this.config.axleTempDeltaWarnC * 0.65
+            tempDelta >= this.config.axleTempDeltaWarnC * 0.65 ||
+            (hotObj.baseline.ready && hotZ >= 2.5 && hotObj.hfEnergy >= 0.45)
           : maxSideVib >= this.config.vibWarnRmsMmS * 0.72);
 
       if (redCond) {
@@ -806,9 +984,7 @@ class TechBitV2Engine {
       if (yellowCond) {
         ax.yellowAccumMs = Math.min(ax.yellowAccumMs + dtMs, yellowConfirmMs + 3000);
       } else if (transientPothole) {
-        if (ax.lastReason !== 'POTHOLE_GUARD') {
-          this.indicator.potholeCount += 1;
-        }
+        if (ax.lastReason !== 'POTHOLE_GUARD') this.indicator.potholeCount += 1;
         ax.lastReason = 'POTHOLE_GUARD';
         ax.yellowAccumMs = Math.max(0, ax.yellowAccumMs - dtMs * 0.5);
       } else {
@@ -821,6 +997,10 @@ class TechBitV2Engine {
         reason = 'TEMP_CRITICAL_BRAKE';
       } else if (tempDelta >= this.config.axleTempDeltaWarnC || maxTemp >= this.config.tempWarnC) {
         reason = 'TEMP_DELTA_HIGH';
+      } else if (mlBearingImpulse) {
+        reason = 'ML_BEARING_IMPULSE';
+      } else if (baselineDriftWarn || baselineDriftCrit) {
+        reason = 'BASELINE_ZSCORE_DRIFT';
       } else if (yellowCond) {
         reason = 'VIB_ANOMALY_LOCAL';
       } else if (roughRoadAllWheels) {
@@ -875,10 +1055,10 @@ class TechBitV2Engine {
 
   exportGroundTruthCsv() {
     const header =
-      'ticket_id,event_id,created_at_utc,wheel_code,severity,reason,temp_c,temp_delta_c,vib_rms,status,ground_truth_label';
+      'ticket_id,event_id,created_at_utc,wheel_code,severity,reason,temp_c,temp_delta_c,vib_rms,kurtosis,hf_energy,z_score,status,ground_truth_label';
     const lines = this.incidents.map(
       (i) =>
-        `${i.ticket_id},${i.event_id},${i.created_at_utc},${i.wheel_code},${i.severity},${i.reason},${i.temp_c},${i.temp_delta_c},${i.vib_rms},${i.status},${i.resolution_code || 'UNLABELED'}`
+        `${i.ticket_id},${i.event_id},${i.created_at_utc},${i.wheel_code},${i.severity},${i.reason},${i.temp_c},${i.temp_delta_c},${i.vib_rms},${i.kurtosis ?? 3.0},${i.hf_energy ?? 0.25},${i.z_score ?? 0},${i.status},${i.resolution_code || 'UNLABELED'}`
     );
     return [header, ...lines].join('\n');
   }
@@ -913,6 +1093,7 @@ class TechBitV2Engine {
 
 module.exports = {
   RIG_PROFILES,
+  VEHICLE_CLASSES,
   TEMP_SENSOR_TYPES,
   VIB_SENSOR_TYPES,
   S3_MODES,

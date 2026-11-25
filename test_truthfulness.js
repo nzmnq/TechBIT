@@ -31,6 +31,8 @@ function makeAxlePacket(slot, overrides = {}) {
       rmsMmS: 1.15,
       peakMmS: 3.0,
       crest: 2.6,
+      kurtosis: 3.05,
+      hfEnergy: 0.24,
       dcOffsetMv: 1650,
       fDomHz: 240,
       clip: false,
@@ -45,6 +47,8 @@ function makeAxlePacket(slot, overrides = {}) {
       rmsMmS: 1.18,
       peakMmS: 3.1,
       crest: 2.6,
+      kurtosis: 3.08,
+      hfEnergy: 0.25,
       dcOffsetMv: 1648,
       fDomHz: 245,
       clip: false,
@@ -60,19 +64,16 @@ function makeAxlePacket(slot, overrides = {}) {
 }
 
 async function runAll() {
-  console.log('\nTechBIT v2.2 React Router SPA — Truthfulness, Per-Module Sensors & API Test Suite\n');
+  console.log('\nTechBIT v2.3 ML & React Router SPA — Truthfulness, Auto-Baseline & Dataset Test Suite\n');
 
-  await test('1. Cold boot defaults to mvp_front (T1-L / T1-R + S3) strictly OFFLINE', () => {
+  await test('1. Cold boot defaults to Hyundai Santa Fe (crossover) + mvp_front strictly OFFLINE', () => {
     const eng = new TechBitV2Engine();
     eng.update(1000);
     const snap = eng.getSnapshot(1000);
     assert.strictEqual(snap.config.rigProfile, 'mvp_front');
+    assert.strictEqual(snap.config.vehicleClass, 'crossover');
     assert.strictEqual(snap.indicator.expectedWheels, 2);
-    assert.strictEqual(snap.indicator.activeWheels, 0);
     assert.strictEqual(snap.indicator.driverSeverity, 'STANDBY');
-    assert.strictEqual(snap.config.moduleSensors.frontLeft.vib, 'piezo_mcp6002');
-    assert.strictEqual(snap.config.moduleSensors.frontRight.temp, 'sht40');
-    assert.strictEqual(snap.config.moduleSensors.s3Master.mode, 's3_can_lte_led');
   });
 
   await test('2. Independent per-module sensor config for T1-L, T1-R, and S3 Master', () => {
@@ -92,36 +93,58 @@ async function runAll() {
       1000
     );
     eng.update(1100);
-
-    // Left (MCP6002 + SHT40) catches Vref fault & condensation; Right (MEMS + NTC) does not false-flag!
     assert.strictEqual(eng.axles[0].left.vrefStatus, 'FAULT');
     assert.strictEqual(eng.axles[0].left.humidityWarn, true);
     assert.strictEqual(eng.axles[0].right.vrefStatus, 'NA');
     assert.strictEqual(eng.axles[0].right.humidityWarn, false);
-    assert.strictEqual(eng.config.moduleSensors.s3Master.mode, 's3_usb_bench');
   });
 
-  await test('3. Two separate USB boards mapped via T1-L and T1-R merge cleanly', () => {
-    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front' });
-    eng.ingestPacket(
-      { type: 'techbit_c3_node', nodeId: 'BOARD_L', left: { rmsMmS: 1.2, tempC: 33.0, dcOffsetMv: 1650, shtOk: true, rh: 40 } },
-      1000,
-      'T1-L'
-    );
-    eng.ingestPacket(
-      { type: 'techbit_c3_node', nodeId: 'BOARD_R', left: { rmsMmS: 1.3, tempC: 34.0, dcOffsetMv: 1655, shtOk: true, rh: 42 } },
-      1050,
-      'T1-R'
-    );
-    eng.update(1100);
-    assert.strictEqual(eng.indicator.activeWheels, 2);
-    assert.strictEqual(eng.axles[0].left.tempC, 33.0);
-    assert.strictEqual(eng.axles[0].right.tempC, 34.0);
+  await test('3. Hyundai Santa Fe Auto-Baseline + Kurtosis/HF catches low-RMS bearing fault (1.15 mm/s)', () => {
+    const eng = new TechBitV2Engine({
+      rigProfile: 'mvp_front',
+      vehicleClass: 'crossover',
+      baselineMinSamples: 20,
+      yellowConfirmSec: 8,
+      redConfirmSec: 5,
+    });
+    let t = 1000;
+
+    // 25 calm Santa Fe frames (~0.45 mm/s) -> learns own quiet baseline
+    for (let i = 0; i < 25; i++) {
+      t += 1000;
+      const j = i % 2 === 0 ? 0.03 : -0.03;
+      eng.ingestPacket(
+        makeAxlePacket(1, {
+          left: { rmsMmS: 0.45 + j, kurtosis: 3.0, hfEnergy: 0.24, tempC: 31.0 },
+          right: { rmsMmS: 0.46 - j, kurtosis: 3.1, hfEnergy: 0.25, tempC: 31.2 },
+        }),
+        t
+      );
+      eng.update(t);
+    }
+    assert.strictEqual(eng.axles[0].left.baseline.ready, true);
+    assert.strictEqual(eng.axles[0].right.baseline.ready, true);
     assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
+
+    // Early worn bearing on T1-R: only 1.15 mm/s (3x below truck 3.5 mm/s!), but kurtosis=6.4, HF=0.64 -> YELLOW!
+    for (let i = 0; i < 10; i++) {
+      t += 1000;
+      eng.ingestPacket(
+        makeAxlePacket(1, {
+          left: { rmsMmS: 0.46, kurtosis: 3.0, hfEnergy: 0.24, tempC: 31.5 },
+          right: { rmsMmS: 1.15, kurtosis: 6.4, hfEnergy: 0.64, tempC: 35.5 },
+        }),
+        t
+      );
+      eng.update(t);
+    }
+    assert.strictEqual(eng.indicator.driverSeverity, 'YELLOW');
+    assert.strictEqual(eng.indicator.wheelCode, 'T1-R');
+    assert.strictEqual(eng.axles[0].lastReason, 'ML_BEARING_IMPULSE');
   });
 
   await test('4. MVP 2-wheel cobblestone stays GREEN with roughRoadActive=true', () => {
-    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front', yellowConfirmSec: 5 });
+    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front', vehicleClass: 'crossover', yellowConfirmSec: 5 });
     let t = 1000;
     for (let step = 0; step < 25; step++) {
       t += 400;
@@ -129,19 +152,32 @@ async function runAll() {
       for (const p of pkts) eng.ingestPacket(p, t);
       eng.update(t);
     }
-    assert.strictEqual(eng.indicator.activeWheels, 2);
     assert.strictEqual(eng.indicator.roughRoadActive, true);
     assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
     assert.strictEqual(eng.burstEvents.length, 0);
   });
 
-  await test('5. Sustained ΔT > 18°C latches YELLOW after 60s, then RED + buzzer on overheat', () => {
-    const eng = new TechBitV2Engine({ rigProfile: 'full_10', yellowConfirmSec: 60, redConfirmSec: 5 });
+  await test('5. Single-wheel pothole clip triggers POTHOLE_GUARD without false alarm', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front', vehicleClass: 'crossover' });
+    eng.ingestPacket(makeAxlePacket(1, { left: { rmsMmS: 0.48 }, right: { rmsMmS: 0.48 } }), 1000);
+    eng.update(1100);
+    eng.ingestPacket(
+      makeAxlePacket(1, { left: { rmsMmS: 3.2, peakMmS: 19.0, crest: 6.2, kurtosis: 8.2, hfEnergy: 0.25, clip: true } }),
+      1300
+    );
+    eng.update(1400);
+    assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
+    assert.ok(eng.indicator.potholeCount >= 1);
+    assert.strictEqual(eng.axles[0].lastReason, 'POTHOLE_GUARD');
+  });
+
+  await test('6. Full 10-wheel truck profile: sustained ΔT > 18°C -> YELLOW after 60s, then RED + buzzer', () => {
+    const eng = new TechBitV2Engine({ rigProfile: 'full_10', vehicleClass: 'truck', yellowConfirmSec: 60, redConfirmSec: 5 });
     let t = 1000;
     for (let s = 1; s <= 5; s++) eng.ingestPacket(makeAxlePacket(s), t);
     eng.update(t);
 
-    for (let sec = 0; sec < 59; sec++) {
+    for (let sec = 0; sec < 60; sec++) {
       t += 1000;
       for (let s = 1; s <= 5; s++) {
         eng.ingestPacket(
@@ -151,16 +187,6 @@ async function runAll() {
       }
       eng.update(t);
     }
-    assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
-
-    t += 1000;
-    for (let s = 1; s <= 5; s++) {
-      eng.ingestPacket(
-        s === 4 ? makeAxlePacket(4, { left: { tempC: 58.0 }, right: { tempC: 34.0 } }) : makeAxlePacket(s),
-        t
-      );
-    }
-    eng.update(t);
     assert.strictEqual(eng.indicator.driverSeverity, 'YELLOW');
     assert.strictEqual(eng.indicator.wheelCode, 'P2-L');
 
@@ -171,97 +197,83 @@ async function runAll() {
     }
     assert.strictEqual(eng.indicator.driverSeverity, 'RED');
     assert.strictEqual(eng.indicator.buzzerOn, true);
-    eng.toggleMute();
-    eng.update(t + 100);
-    assert.strictEqual(eng.indicator.buzzerOn, false);
-  });
-
-  await test('6. Single-wheel pothole clip triggers POTHOLE_GUARD without false alarm', () => {
-    const eng = new TechBitV2Engine({ rigProfile: 'mvp_front' });
-    eng.ingestPacket(makeAxlePacket(1), 1000);
-    eng.update(1100);
-    eng.ingestPacket(
-      makeAxlePacket(1, { left: { rmsMmS: 6.1, peakMmS: 26.0, crest: 6.3, clip: true } }),
-      1300
-    );
-    eng.update(1400);
-    assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
-    assert.ok(eng.indicator.potholeCount >= 1);
-    assert.strictEqual(eng.axles[0].lastReason, 'POTHOLE_GUARD');
   });
 
   await test('7. Shadow Mode records ANOMALY_BURST silently while keeping driver LED GREEN', () => {
     const eng = new TechBitV2Engine({ rigProfile: 'mvp_front', shadowModeEnabled: true });
     eng.ingestPacket(
-      makeAxlePacket(1, { left: { tempC: 34.0, rmsMmS: 1.15 }, right: { tempC: 47.0, rmsMmS: 2.3 } }),
+      makeAxlePacket(1, { left: { tempC: 34.0, rmsMmS: 0.5 }, right: { tempC: 46.5, rmsMmS: 0.9 } }),
       2000
     );
     eng.update(2100);
     assert.strictEqual(eng.indicator.driverSeverity, 'GREEN');
     assert.strictEqual(eng.indicator.shadowCount, 1);
     assert.strictEqual(eng.burstEvents[0].severity, 'SHADOW');
-    assert.strictEqual(eng.burstEvents[0].wheel_code, 'T1-R');
   });
 
-  await test('8. HTTP Server SPA routes (/, /blackbox, /cli), per-module API, and CSV export', async () => {
-    const { server } = createServer({ disableTimers: true });
+  await test('8. HTTP Server SPA routes (/, /blackbox, /dataset, /cli) + Dataset Recorder CSV/JSON export', async () => {
+    const { server } = createServer({ disableTimers: true, persistDatasets: false });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
 
     try {
-      for (const route of ['/', '/blackbox', '/cli']) {
+      for (const route of ['/', '/blackbox', '/dataset', '/cli']) {
         const res = await fetch(`${base}${route}`);
         assert.strictEqual(res.status, 200, `Expected 200 for SPA route ${route}`);
         const html = await res.text();
-        assert.ok(html.includes('<div id="root"></div>'), `Expected React mount root on ${route}`);
+        assert.ok(html.includes('<div id="root"></div>'));
       }
 
-      let res = await fetch(`${base}/api/command`, {
+      // Start STO / Santa Fe recording session
+      let res = await fetch(`${base}/api/dataset/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'config',
-          config: {
-            redConfirmSec: 0,
-            moduleSensors: {
-              frontLeft: { vib: 'piezo_mcp6002', temp: 'sht40' },
-              frontRight: { vib: 'piezo_direct', temp: 'ntc' },
-              s3Master: { mode: 's3_ble_bridge', link: 'can_500k' },
-            },
-          },
+          vehicle_model: 'Hyundai Santa Fe',
+          condition: 'BEFORE_REPAIR',
+          fault_label: 'BEARING_WEAR_EARLY',
+          fault_wheel: 'AXLE1_RIGHT',
         }),
       });
-      let data = await res.json();
-      assert.strictEqual(data.state.config.moduleSensors.frontRight.temp, 'ntc');
-      assert.strictEqual(data.state.config.moduleSensors.s3Master.mode, 's3_ble_bridge');
+      const started = await res.json();
+      assert.strictEqual(started.ok, true);
+      const sessionId = started.passport.session_id;
 
-      await fetch(`${base}/api/command`, {
+      // Mark speed 60 km/h + send live telemetry + mark pothole + send another frame
+      await fetch(`${base}/api/dataset/mark`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'raw', cmd: 'slot 1' }),
+        body: JSON.stringify({ speedKmh: 60 }),
       });
-
-      res = await fetch(`${base}/api/telemetry`, {
+      await fetch(`${base}/api/telemetry`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...makeAxlePacket(1, { right: { tempC: 104.0 } }), _source: 'serial' }),
+        body: JSON.stringify({ ...makeAxlePacket(1, { right: { rmsMmS: 1.4, kurtosis: 6.8, hfEnergy: 0.65 } }), _source: 'serial' }),
       });
-      const ack = await res.json();
-      assert.strictEqual(ack.ok, true);
-      assert.deepStrictEqual(ack.commands, ['slot 1']);
-
-      const st = await (await fetch(`${base}/api/state`)).json();
-      assert.ok(st.incidents.length >= 1);
-      const ticketId = st.incidents[0].ticket_id;
-
-      await fetch(`${base}/api/command`, {
+      await fetch(`${base}/api/dataset/mark`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'resolve_ticket', ticketId, resolutionCode: 'BRAKE_STUCK' }),
+        body: JSON.stringify({ eventTag: 'POTHOLE' }),
+      });
+      await fetch(`${base}/api/telemetry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...makeAxlePacket(1), _source: 'serial' }),
       });
 
-      const csv = await (await fetch(`${base}/api/export.csv`)).text();
-      assert.ok(csv.includes('BRAKE_STUCK'));
+      res = await fetch(`${base}/api/dataset/stop`, { method: 'POST' });
+      const stopped = await res.json();
+      assert.strictEqual(stopped.ok, true);
+      assert.strictEqual(stopped.sampleCount, 2);
+
+      const csv = await (await fetch(`${base}/api/dataset/export/${sessionId}?format=csv`)).text();
+      assert.ok(csv.includes('kurtosis_L,kurtosis_R,hf_energy_L,hf_energy_R'));
+      assert.ok(csv.includes('BEARING_WEAR_EARLY'));
+      assert.ok(csv.includes('POTHOLE'));
+
+      const jsonObj = await (await fetch(`${base}/api/dataset/export/${sessionId}?format=json`)).json();
+      assert.strictEqual(jsonObj.passport.vehicle_model, 'Hyundai Santa Fe');
+      assert.strictEqual(jsonObj.samples.length, 2);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

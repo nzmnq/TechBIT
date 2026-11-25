@@ -9,6 +9,7 @@ import {
 import {
   ActivityIcon,
   BoxIcon,
+  DatabaseIcon,
   IconSwap,
   RotateCcwIcon,
   TerminalIcon,
@@ -40,7 +41,9 @@ export default function AppLayout() {
   };
   const source = state?.source || { mode: 'waiting', packetsPerSec: 0, packetCount: 0 };
   const openIncidents = (state?.incidents || []).filter((x) => x.status === 'OPEN').length;
-  const profileLabel = state?.profile?.shortLabel || 'MVP 2 колеса + S3';
+  const datasetActive = Boolean(state?.dataset?.active);
+  const vehLabel = state?.config?.vehicleClass === 'truck' ? 'Фура 40 т' : 'Hyundai Santa Fe';
+  const profileLabel = `${vehLabel} · ${state?.profile?.shortLabel || 'MVP 2 колеса + S3'}`;
 
   const severityHint = (() => {
     if (ind.driverSeverity === 'RED') {
@@ -102,6 +105,15 @@ export default function AppLayout() {
             {openIncidents > 0 && (
               <span className="nav-counter tabular">{openIncidents}</span>
             )}
+          </NavLink>
+
+          <NavLink
+            to="/dataset"
+            className={({ isActive }) => `nav-pill${isActive ? ' active' : ''}`}
+          >
+            <DatabaseIcon />
+            <span>ML Датасет</span>
+            {datasetActive && <span className="nav-rec-dot" aria-label="Йде запис" />}
           </NavLink>
 
           <NavLink

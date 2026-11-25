@@ -212,6 +212,25 @@ export function SlidersIcon({ className = 'ico' }) {
   );
 }
 
+export function DatabaseIcon({ className = 'ico ico-sm' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...baseProps}>
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+      <path d="M3 12a9 3 0 0 0 18 0" />
+    </svg>
+  );
+}
+
+export function FlagIcon({ className = 'ico ico-sm' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" {...baseProps}>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" y1="22" x2="4" y2="15" />
+    </svg>
+  );
+}
+
 /**
  * Contextual icon cross-fade obeying `better-ui` exact recipe:
  * Both icons stay mounted in one grid cell; 300ms cubic-bezier(0.2, 0, 0, 1).

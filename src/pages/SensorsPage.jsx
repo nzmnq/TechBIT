@@ -114,8 +114,21 @@ function WheelCard({ side, sensorCfg, selected, onSelect }) {
               ? `Vref ${Math.round(side.dcOffsetMv)} мВ${side.vrefStatus === 'FAULT' ? ' !' : ''}`
               : 'Vref —'}
         </span>
-        <span className="hw-tag tabular">
-          {online ? `Crest ${fmtNum(side.crest, 2)}` : 'Crest —'}
+        <span className="hw-tag tabular" data-warn={online && (side.kurtosis ?? 3) >= 5.5 ? 'true' : 'false'}>
+          {online ? `Kurt ${fmtNum(side.kurtosis, 1)}` : 'Kurt —'}
+        </span>
+        <span className="hw-tag tabular" data-info={online && (side.hfEnergy ?? 0) >= 0.56 ? 'true' : 'false'}>
+          {online ? `HF ${Math.round((side.hfEnergy ?? 0) * 100)}%` : 'HF —'}
+        </span>
+        <span
+          className="hw-tag tabular"
+          data-warn={online && side.baseline?.ready && side.baseline.lastZScore >= 3.5 ? 'true' : 'false'}
+        >
+          {!online
+            ? 'Z —'
+            : side.baseline?.ready
+              ? `Z ${fmtNum(side.baseline.lastZScore, 1)}σ`
+              : `База ${side.baseline?.samples ?? 0}`}
         </span>
         {online && side.clip && (
           <span className="hw-tag" data-info="true">
@@ -303,6 +316,25 @@ export default function SensorsPage() {
           </div>
 
           <div className="profile-switcher-row">
+            <div className="seg-control" role="group" aria-label="Клас авто для Auto-Baseline">
+              <button
+                type="button"
+                className="seg-btn"
+                aria-pressed={(cfg.vehicleClass || 'crossover') === 'crossover'}
+                onClick={() => updateConfig({ vehicleClass: 'crossover' })}
+              >
+                Hyundai Santa Fe
+              </button>
+              <button
+                type="button"
+                className="seg-btn"
+                aria-pressed={cfg.vehicleClass === 'truck'}
+                onClick={() => updateConfig({ vehicleClass: 'truck' })}
+              >
+                Фура 40 т
+              </button>
+            </div>
+
             <div className="seg-control" role="group" aria-label="Профіль кількості коліс">
               <button
                 type="button"
@@ -329,6 +361,15 @@ export default function SensorsPage() {
                 Зчіпка: 10 коліс
               </button>
             </div>
+
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => postCommand({ action: 'relearn' })}
+              title="Скинути Auto-Baseline, щоб система наново вивчила норму авто"
+            >
+              Перевчити норму
+            </button>
 
             <button
               type="button"

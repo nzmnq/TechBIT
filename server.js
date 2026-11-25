@@ -7,6 +7,8 @@ const os = require('os');
 const { RIG_PROFILES, TechBitV2Engine } = require('./v2_engine');
 
 const DIST_DIR = path.join(__dirname, 'dist');
+const DATASETS_DIR = path.join(__dirname, 'datasets');
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -65,8 +67,8 @@ function buildSimSpectrum(rmsMv, domFreqHz, isRough, phase) {
   for (let b = 0; b < 32; b++) {
     const fCenter = b * 140 + 70;
     const dist = Math.abs(fCenter - domFreqHz);
-    const peak = dist < 170 ? (1 - dist / 180) * 1.45 : 0;
-    const lowFloor = fCenter < 600 ? (isRough ? 0.55 : 0.25) : 0.08;
+    const peak = dist < 170 ? (1 - dist / 180) * 1.6 : 0;
+    const lowFloor = fCenter < 600 ? (isRough ? 0.62 : 0.34) : 0.07;
     const ripple = 0.86 + 0.14 * Math.sin(phase + b * 0.7);
     bins[b] = Number((rmsMv * (lowFloor + peak) * ripple).toFixed(1));
   }
@@ -79,6 +81,7 @@ function generateV2SimPackets(rawScenario, elapsedMs, tickIdx, rigProfile = 'mvp
   const slots = profile.slots;
   const isMvpFront = profile.id === 'mvp_front';
   const isFull10 = profile.id === 'full_10';
+  const isCrossover = (config.vehicleClass || 'crossover') === 'crossover';
   const phase = tickIdx * 0.32;
   const packets = [];
   const nodeIds = ['C3_T1_FRONT', 'C3_T2_REAR', 'C3_P1_TRL', 'C3_P2_TRL', 'C3_P3_TRL'];
@@ -104,7 +107,7 @@ function generateV2SimPackets(rawScenario, elapsedMs, tickIdx, rigProfile = 'mvp
     type: 'techbit_s3_master',
     mcu: 'SIM_ESP32-S3',
     deviceId: isMvpFront ? 'S3_MASTER_MVP' : 'S3_A1B2C3',
-    tractorId: 'TR_001',
+    tractorId: isCrossover ? 'SANTA_FE_MVP' : 'TR_001',
     trailerId: profile.hasBridge ? 'TL_042' : '—',
     bleActive: s3Cfg.mode === 's3_ble_bridge',
     lteOnline: s3Cfg.mode !== 's3_usb_bench',
@@ -120,6 +123,9 @@ function generateV2SimPackets(rawScenario, elapsedMs, tickIdx, rigProfile = 'mvp
   const shadowRight = !isFull10;
   const shtFaultSlot = isFull10 ? 4 : 1;
 
+  // Realistic base vibration scale: quiet Hyundai Santa Fe (~0.48 mm/s) vs 40t Truck (~1.15 mm/s)
+  const baseV = isCrossover ? 0.48 : 1.15;
+
   for (const slot of slots) {
     if (scenario === 'link_loss') {
       if (isFull10 && slot >= 3) continue;
@@ -129,93 +135,120 @@ function generateV2SimPackets(rawScenario, elapsedMs, tickIdx, rigProfile = 'mvp
     const leftTempType = slot === 1 ? flCfg.temp : (config.tempSensorType || 'sht40');
     const rightTempType = slot === 1 ? frCfg.temp : (config.tempSensorType || 'sht40');
 
-    const jL = 0.95 + 0.07 * Math.sin(phase + slot * 1.1);
-    const jR = 0.95 + 0.07 * Math.cos(phase + slot * 1.4);
+    const jL = 0.94 + 0.06 * Math.sin(phase + slot * 1.1);
+    const jR = 0.94 + 0.06 * Math.cos(phase + slot * 1.4);
 
-    let vL = 1.15 * jL;
-    let vR = 1.18 * jR;
+    let vL = baseV * jL;
+    let vR = (baseV + 0.02) * jR;
     let pL = vL * 2.6;
     let pR = vR * 2.6;
     let cL = 2.65;
     let cR = 2.62;
-    let tL = 33.2 + slot * 0.5;
-    let tR = 33.5 + slot * 0.5;
+    let kL = 3.05 + 0.15 * Math.sin(phase);
+    let kR = 3.08 + 0.15 * Math.cos(phase);
+    let hfL = 0.23;
+    let hfR = 0.24;
+    let tL = 31.5 + slot * 0.5;
+    let tR = 31.8 + slot * 0.5;
     let rhL = 42.0 + slot;
     let rhR = 42.5 + slot;
     let shtOkL = leftTempType !== 'ntc';
     let shtOkR = rightTempType !== 'ntc';
     let vrefL = 1650 + Math.sin(phase + slot) * 7;
     let vrefR = 1648 + Math.cos(phase + slot) * 7;
-    let fL = 240 + slot * 10;
-    let fR = 245 + slot * 10;
+    let fL = 230 + slot * 10;
+    let fR = 235 + slot * 10;
     let clipL = false;
     let clipR = false;
     let rough = false;
 
     if (scenario === 'cobblestone') {
       rough = true;
-      vL = (4.6 + slot * 0.12) * jL;
-      vR = (4.7 + slot * 0.11) * jR;
+      const cobbleScale = isCrossover ? 2.85 : 4.6;
+      vL = (cobbleScale + slot * 0.1) * jL;
+      vR = (cobbleScale + 0.08 + slot * 0.1) * jR;
       pL = vL * 3.1;
       pR = vR * 3.1;
       cL = 3.15;
       cR = 3.12;
+      kL = 3.5;
+      kR = 3.55;
+      hfL = 0.28;
+      hfR = 0.29;
       fL = 285;
       fR = 290;
     } else if (scenario === 'pothole_clip') {
       const cyc = elapsedMs % 5000;
       if (slot === potholeSlot && cyc >= 700 && cyc < 1100) {
-        vL = 5.9;
-        pL = 24.5;
+        vL = isCrossover ? 3.2 : 5.9;
+        pL = vL * 5.8;
         cL = 6.2;
+        kL = 8.4;
+        hfL = 0.26; // Road impact stays low-frequency (< 600 Hz), NOT bearing HF resonance!
         clipL = true;
-        fL = 410;
+        fL = 380;
       }
     } else if (scenario === 'brake_drag') {
       if (slot === brakeSlot) {
         const ramp = Math.min(1.0, elapsedMs / 9000);
         if (brakeRight) {
           tR = 58.0 + ramp * 44.0;
-          vR = (3.9 + ramp * 2.6) * jR;
+          vR = (isCrossover ? 1.8 + ramp * 1.9 : 3.9 + ramp * 2.6) * jR;
           pR = vR * 2.9;
+          kR = 4.6 + ramp * 2.1;
+          hfR = 0.62 + ramp * 0.16;
           fR = 3420;
         } else {
           tL = 58.0 + ramp * 44.0;
-          vL = (3.9 + ramp * 2.6) * jL;
+          vL = (isCrossover ? 1.8 + ramp * 1.9 : 3.9 + ramp * 2.6) * jL;
           pL = vL * 2.9;
+          kL = 4.6 + ramp * 2.1;
+          hfL = 0.62 + ramp * 0.16;
           fL = 3420;
         }
       }
     } else if (scenario === 'bearing_wear') {
       if (slot === bearingSlot) {
+        // Demonstrates Domain-Invariant ML: on Santa Fe, RMS is only ~1.55 mm/s (below truck 3.5!),
+        // yet Kurtosis (7.1) + HF Energy (0.69) + Z-score catch the bearing spall cleanly!
+        const wornV = isCrossover ? 1.55 : 4.65;
         if (bearingRight) {
-          tR = 62.5;
-          vR = 4.65 * jR;
-          pR = vR * 2.85;
+          tR = isCrossover ? 44.5 : 62.5;
+          vR = wornV * jR;
+          pR = vR * 3.45;
+          cR = 3.45;
+          kR = 7.15;
+          hfR = 0.69;
           fR = 1480;
         } else {
-          tL = 62.5;
-          vL = 4.65 * jL;
-          pL = vL * 2.85;
+          tL = isCrossover ? 44.5 : 62.5;
+          vL = wornV * jL;
+          pL = vL * 3.45;
+          cL = 3.45;
+          kL = 7.15;
+          hfL = 0.69;
           fL = 1480;
         }
       }
     } else if (scenario === 'shadow_early') {
       if (slot === shadowSlot) {
+        const driftV = isCrossover ? 0.92 : 2.25;
         if (shadowRight) {
-          tR = 46.5;
-          vR = 2.25 * jR;
+          tR = 44.5;
+          vR = driftV * jR;
+          kR = 4.4;
+          hfR = 0.48;
           fR = 960;
         } else {
-          tL = 46.5;
-          vL = 2.25 * jL;
+          tL = 44.5;
+          vL = driftV * jL;
+          kL = 4.4;
+          hfL = 0.48;
           fL = 960;
         }
       }
     } else if (scenario === 'sensor_fault') {
-      if (slot === 1) {
-        vrefL = 780.0;
-      }
+      if (slot === 1) vrefL = 780.0;
       if (slot === shtFaultSlot) {
         shtOkL = false;
         rhR = 92.4;
@@ -237,6 +270,10 @@ function generateV2SimPackets(rawScenario, elapsedMs, tickIdx, rigProfile = 'mvp
         rmsMmS: Number(vL.toFixed(2)),
         peakMmS: Number(pL.toFixed(2)),
         crest: Number(cL.toFixed(2)),
+        kurtosis: Number(kL.toFixed(2)),
+        hfEnergy: Number(hfL.toFixed(3)),
+        bandLow: Number(Math.max(0.05, 1.0 - hfL).toFixed(3)),
+        tonality: Number((hfL > 0.5 ? 5.8 : 1.6).toFixed(2)),
         dcOffsetMv: Number(vrefL.toFixed(1)),
         fDomHz: Math.round(fL),
         clip: clipL,
@@ -250,6 +287,10 @@ function generateV2SimPackets(rawScenario, elapsedMs, tickIdx, rigProfile = 'mvp
         rmsMmS: Number(vR.toFixed(2)),
         peakMmS: Number(pR.toFixed(2)),
         crest: Number(cR.toFixed(2)),
+        kurtosis: Number(kR.toFixed(2)),
+        hfEnergy: Number(hfR.toFixed(3)),
+        bandLow: Number(Math.max(0.05, 1.0 - hfR).toFixed(3)),
+        tonality: Number((hfR > 0.5 ? 5.8 : 1.6).toFixed(2)),
         dcOffsetMv: Number(vrefR.toFixed(1)),
         fDomHz: Math.round(fR),
         clip: clipR,
@@ -307,11 +348,76 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
+function sessionSamplesToCsv(session) {
+  const header = [
+    'session_id',
+    'condition',
+    'fault_label',
+    'vehicle_class',
+    'ts_utc',
+    'speed_kmh',
+    'event_tag',
+    'slot',
+    'rms_L',
+    'rms_R',
+    'peak_L',
+    'peak_R',
+    'crest_L',
+    'crest_R',
+    'kurtosis_L',
+    'kurtosis_R',
+    'hf_energy_L',
+    'hf_energy_R',
+    'fdom_L',
+    'fdom_R',
+    'temp_L',
+    'temp_R',
+    'delta_temp',
+    'ratio_vib',
+    'z_L',
+    'z_R',
+  ].join(',');
+
+  const p = session.passport;
+  const rows = (session.samples || []).map((s) =>
+    [
+      p.session_id,
+      p.condition,
+      p.fault_label,
+      p.vehicle_class,
+      s.ts_utc,
+      s.speed_kmh,
+      s.event_tag || 'NONE',
+      s.slot,
+      s.rms_L,
+      s.rms_R,
+      s.peak_L,
+      s.peak_R,
+      s.crest_L,
+      s.crest_R,
+      s.kurtosis_L,
+      s.kurtosis_R,
+      s.hf_energy_L,
+      s.hf_energy_R,
+      s.fdom_L,
+      s.fdom_R,
+      s.temp_L,
+      s.temp_R,
+      s.delta_temp,
+      s.ratio_vib,
+      s.z_L,
+      s.z_R,
+    ].join(',')
+  );
+  return [header, ...rows].join('\n');
+}
+
 function createServer(options = {}) {
   const engine = new TechBitV2Engine(options.engineConfig || {});
   const sseClients = new Set();
   const pendingEspCommands = [];
   const rawLogs = [];
+  const persistDatasets = options.persistDatasets !== false;
 
   const sourceMeta = {
     mode: 'waiting',
@@ -325,6 +431,18 @@ function createServer(options = {}) {
     simTick: 0,
     espPollUrl: null,
     espPollError: null,
+  };
+
+  // ML Dataset Recorder state (Hyundai Santa Fe + STO BEFORE/AFTER protocol)
+  const datasetRecorder = {
+    active: false,
+    sessionSeq: 0,
+    startedAtMs: null,
+    speedKmh: 60,
+    pendingEventTag: null,
+    potholeMarks: 0,
+    current: null, // { passport, samples: [] }
+    savedSessions: [], // [{ passport, sampleCount, startedAtUtc, stoppedAtUtc, samples }]
   };
 
   function addLog(tag, text) {
@@ -354,6 +472,142 @@ function createServer(options = {}) {
     return out;
   }
 
+  function captureDatasetFrame(nowMs) {
+    if (!datasetRecorder.active || !datasetRecorder.current) return;
+    const profile = engine.getProfileMeta();
+    const tag = datasetRecorder.pendingEventTag;
+    datasetRecorder.pendingEventTag = null;
+
+    for (const ax of engine.axles) {
+      if (!ax.online || !profile.slots.includes(ax.slot)) continue;
+      datasetRecorder.current.samples.push({
+        ts_utc: new Date(nowMs).toISOString(),
+        speed_kmh: datasetRecorder.speedKmh,
+        event_tag: tag || (ax.lastReason === 'POTHOLE_GUARD' ? 'AUTO_POTHOLE' : 'NONE'),
+        slot: ax.key,
+        rms_L: Number(ax.left.rmsMmS.toFixed(3)),
+        rms_R: Number(ax.right.rmsMmS.toFixed(3)),
+        peak_L: Number(ax.left.peakMmS.toFixed(2)),
+        peak_R: Number(ax.right.peakMmS.toFixed(2)),
+        crest_L: Number(ax.left.crest.toFixed(2)),
+        crest_R: Number(ax.right.crest.toFixed(2)),
+        kurtosis_L: Number(ax.left.kurtosis.toFixed(2)),
+        kurtosis_R: Number(ax.right.kurtosis.toFixed(2)),
+        hf_energy_L: Number(ax.left.hfEnergy.toFixed(3)),
+        hf_energy_R: Number(ax.right.hfEnergy.toFixed(3)),
+        fdom_L: Math.round(ax.left.fDomHz || 0),
+        fdom_R: Math.round(ax.right.fDomHz || 0),
+        temp_L: Number((ax.left.tempC ?? 0).toFixed(1)),
+        temp_R: Number((ax.right.tempC ?? 0).toFixed(1)),
+        delta_temp: Number(ax.tempDeltaC.toFixed(1)),
+        ratio_vib: Number(ax.vibRatio.toFixed(2)),
+        z_L: Number(ax.left.baseline.lastZScore.toFixed(2)),
+        z_R: Number(ax.right.baseline.lastZScore.toFixed(2)),
+      });
+      if (datasetRecorder.current.samples.length > 6000) {
+        datasetRecorder.current.samples.shift();
+      }
+    }
+  }
+
+  function startDatasetSession(passportInput = {}) {
+    datasetRecorder.sessionSeq += 1;
+    const now = new Date();
+    const day = now.toISOString().slice(0, 10).replace(/-/g, '_');
+    const autoId = `STO_${day}_${String(datasetRecorder.sessionSeq).padStart(3, '0')}`;
+    const cleanId = String(passportInput.session_id || autoId).replace(/[^A-Za-z0-9_-]/g, '_');
+
+    const passport = {
+      session_id: cleanId,
+      vehicle_class: passportInput.vehicle_class || engine.config.vehicleClass || 'crossover',
+      vehicle_model: passportInput.vehicle_model || 'Hyundai Santa Fe',
+      wheel_diameter_inch: Number(passportInput.wheel_diameter_inch || 18),
+      condition: passportInput.condition === 'AFTER_REPAIR' ? 'AFTER_REPAIR' : 'BEFORE_REPAIR',
+      fault_label: passportInput.fault_label || 'HEALTHY_BASELINE',
+      fault_wheel: passportInput.fault_wheel || 'AXLE1_RIGHT',
+      paired_session_id: passportInput.paired_session_id || '',
+      sampling_rate_hz: Number(passportInput.sampling_rate_hz || 9000),
+      sensor_model: passportInput.sensor_model || 'Piezo_MCP6002_BAT54S_GY-SHT40',
+      mount_type: passportInput.mount_type || 'knuckle_bracket',
+      ambient_temp_c: Number(passportInput.ambient_temp_c ?? 12),
+      road_notes: passportInput.road_notes || 'asphalt 40/60/80 kmh + potholes',
+      mechanic_notes: passportInput.mechanic_notes || '',
+      started_at_utc: now.toISOString(),
+    };
+
+    datasetRecorder.active = true;
+    datasetRecorder.startedAtMs = Date.now();
+    datasetRecorder.speedKmh = Number(passportInput.speed_kmh ?? 60);
+    datasetRecorder.pendingEventTag = null;
+    datasetRecorder.potholeMarks = 0;
+    datasetRecorder.current = { passport, samples: [] };
+    addLog('DATASET', `Старт запису ${cleanId} (${passport.vehicle_model} · ${passport.condition})`);
+    return passport;
+  }
+
+  function stopDatasetSession() {
+    if (!datasetRecorder.active || !datasetRecorder.current) return null;
+    const finished = {
+      passport: {
+        ...datasetRecorder.current.passport,
+        stopped_at_utc: new Date().toISOString(),
+        sample_count: datasetRecorder.current.samples.length,
+        pothole_marks: datasetRecorder.potholeMarks,
+      },
+      samples: datasetRecorder.current.samples,
+    };
+
+    datasetRecorder.active = false;
+    datasetRecorder.startedAtMs = null;
+    datasetRecorder.current = null;
+
+    datasetRecorder.savedSessions.unshift(finished);
+    if (datasetRecorder.savedSessions.length > 20) datasetRecorder.savedSessions.pop();
+
+    if (persistDatasets) {
+      try {
+        fs.mkdirSync(DATASETS_DIR, { recursive: true });
+        const outJson = path.join(DATASETS_DIR, `${finished.passport.session_id}.json`);
+        const outCsv = path.join(DATASETS_DIR, `${finished.passport.session_id}.csv`);
+        fs.writeFileSync(outJson, JSON.stringify(finished, null, 2), 'utf-8');
+        fs.writeFileSync(outCsv, sessionSamplesToCsv(finished), 'utf-8');
+      } catch (_) {}
+    }
+
+    addLog(
+      'DATASET',
+      `Збережено ${finished.passport.session_id}: ${finished.samples.length} відліків (${finished.passport.condition})`
+    );
+    return finished;
+  }
+
+  function getDatasetSnapshot() {
+    return {
+      active: datasetRecorder.active,
+      sessionId: datasetRecorder.current?.passport?.session_id || null,
+      startedAtUtc: datasetRecorder.current?.passport?.started_at_utc || null,
+      elapsedSec: datasetRecorder.active && datasetRecorder.startedAtMs
+        ? Math.floor((Date.now() - datasetRecorder.startedAtMs) / 1000)
+        : 0,
+      sampleCount: datasetRecorder.current?.samples?.length || 0,
+      speedKmh: datasetRecorder.speedKmh,
+      potholeMarks: datasetRecorder.potholeMarks,
+      passport: datasetRecorder.current?.passport || null,
+      sessions: datasetRecorder.savedSessions.map((s) => ({
+        session_id: s.passport.session_id,
+        vehicle_model: s.passport.vehicle_model,
+        vehicle_class: s.passport.vehicle_class,
+        condition: s.passport.condition,
+        fault_label: s.passport.fault_label,
+        fault_wheel: s.passport.fault_wheel,
+        paired_session_id: s.passport.paired_session_id,
+        started_at_utc: s.passport.started_at_utc,
+        sample_count: s.samples.length,
+        pothole_marks: s.passport.pothole_marks || 0,
+      })),
+    };
+  }
+
   function ingestTelemetryObject(obj, sourceKind, senderLabel = null, slotOverride = null) {
     const now = Date.now();
     if (sourceKind !== 'simulator' && sourceMeta.mode === 'simulator') {
@@ -380,6 +634,7 @@ function createServer(options = {}) {
     const activePort = port || 5050;
     return {
       ...snap,
+      dataset: getDatasetSnapshot(),
       source: {
         ...sourceMeta,
         wifiUrls: getLanUrls(activePort),
@@ -441,13 +696,79 @@ function createServer(options = {}) {
       return;
     }
 
+    // Dataset Recorder endpoints (Santa Fe + STO BEFORE/AFTER protocol)
+    if (req.method === 'POST' && pathname === '/api/dataset/start') {
+      try {
+        const body = await readJsonBody(req);
+        const passport = startDatasetSession(body);
+        broadcastState(boundPort);
+        return sendJson(res, 200, { ok: true, passport, dataset: getDatasetSnapshot() });
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/dataset/mark') {
+      try {
+        const body = await readJsonBody(req);
+        if (body.speedKmh !== undefined && Number.isFinite(Number(body.speedKmh))) {
+          datasetRecorder.speedKmh = Number(body.speedKmh);
+          addLog('DATASET', `Швидкість поїздки -> ${datasetRecorder.speedKmh} км/год`);
+        }
+        if (body.eventTag) {
+          datasetRecorder.pendingEventTag = String(body.eventTag).toUpperCase().slice(0, 24);
+          if (datasetRecorder.pendingEventTag === 'POTHOLE') datasetRecorder.potholeMarks += 1;
+          addLog('DATASET', `Мітка події: ${datasetRecorder.pendingEventTag}`);
+        }
+        broadcastState(boundPort);
+        return sendJson(res, 200, { ok: true, dataset: getDatasetSnapshot() });
+      } catch (err) {
+        return sendJson(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/dataset/stop') {
+      const finished = stopDatasetSession();
+      broadcastState(boundPort);
+      return sendJson(res, 200, {
+        ok: Boolean(finished),
+        sessionId: finished?.passport?.session_id || null,
+        sampleCount: finished?.samples?.length || 0,
+        dataset: getDatasetSnapshot(),
+      });
+    }
+
+    if (req.method === 'GET' && pathname.startsWith('/api/dataset/export/')) {
+      const id = decodeURIComponent(pathname.slice('/api/dataset/export/'.length));
+      const fmt = urlObj.searchParams.get('format') === 'csv' ? 'csv' : 'json';
+      const session = datasetRecorder.savedSessions.find((s) => s.passport.session_id === id);
+      if (!session) return sendJson(res, 404, { ok: false, error: 'Session not found' });
+
+      if (fmt === 'csv') {
+        res.writeHead(200, {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${id}.csv"`,
+        });
+        res.end(sessionSamplesToCsv(session));
+      } else {
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${id}.json"`,
+        });
+        res.end(JSON.stringify(session, null, 2));
+      }
+      return;
+    }
+
     if (req.method === 'POST' && pathname === '/api/telemetry') {
       try {
         const body = await readJsonBody(req);
         const source = body._source === 'serial' ? 'serial' : 'wifi';
         const slotOverride = body._slotOverride || null;
         const ok = ingestTelemetryObject(body, source, req.socket.remoteAddress, slotOverride);
-        engine.update(Date.now());
+        const now = Date.now();
+        engine.update(now);
+        captureDatasetFrame(now);
         broadcastState(boundPort);
         return sendJson(res, ok ? 200 : 400, {
           ok,
@@ -466,6 +787,10 @@ function createServer(options = {}) {
         if (action === 'reset') {
           engine.resetAlerts();
           addLog('CMD', 'Скинуто зафіксовані тривоги й лічильник ям.');
+        } else if (action === 'relearn') {
+          engine.resetBaselines();
+          queueEspCommand('relearn');
+          addLog('ML', 'Скинуто Auto-Baseline — система вчить нову норму авто.');
         } else if (action === 'clear') {
           engine.reset();
           sourceMeta.mode = 'waiting';
@@ -477,16 +802,16 @@ function createServer(options = {}) {
           addLog('CMD', `Зумер кабіни: ${muted ? 'ВИМКНЕНО (MUTE)' : 'УВІМКНЕНО'}`);
         } else if (action === 'config' && body.config) {
           const prevProfile = engine.config.rigProfile;
+          const prevVeh = engine.config.vehicleClass;
           engine.updateConfig(body.config);
-          if (body.config.rigProfile && body.config.rigProfile !== prevProfile) {
+          if (body.config.vehicleClass && body.config.vehicleClass !== prevVeh) {
+            queueEspCommand(`vehicle ${engine.config.vehicleClass}`);
+            addLog('ML', `Клас авто -> ${engine.config.vehicleClass === 'crossover' ? 'Кросовер (Hyundai Santa Fe)' : 'Фура 40 т'}`);
+          } else if (body.config.rigProfile && body.config.rigProfile !== prevProfile) {
             engine.resetAlerts();
             addLog('PROFILE', `Профіль стенду: ${engine.getProfileMeta().shortLabel}`);
           } else {
-            const ms = engine.config.moduleSensors;
-            addLog(
-              'CFG',
-              `Оновлено v${engine.config.configVersion} · L:${ms.frontLeft.vib}/${ms.frontLeft.temp} · R:${ms.frontRight.vib}/${ms.frontRight.temp} · S3:${ms.s3Master.mode}`
-            );
+            addLog('CFG', `Оновлено конфігурацію v${engine.config.configVersion}`);
           }
         } else if (action === 'resolve_ticket') {
           const tkt = engine.resolveIncident(body.ticketId, body.resolutionCode);
@@ -502,7 +827,7 @@ function createServer(options = {}) {
             }
             addLog(
               'SIM',
-              `Симулятор [${engine.getProfileMeta().shortLabel}]: ${sourceMeta.simScenario}`
+              `Симулятор [${engine.config.vehicleClass}/${engine.getProfileMeta().shortLabel}]: ${sourceMeta.simScenario}`
             );
           } else {
             sourceMeta.mode = 'waiting';
@@ -534,7 +859,6 @@ function createServer(options = {}) {
       }
     }
 
-    // Static assets & React Router SPA fallback from dist/
     const relPath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
     const safePath = path.normalize(path.join(DIST_DIR, relPath));
     if (safePath.startsWith(DIST_DIR) && fs.existsSync(safePath) && fs.statSync(safePath).isFile()) {
@@ -544,7 +868,6 @@ function createServer(options = {}) {
       return;
     }
 
-    // SPA client-side route fallback (/blackbox, /cli, etc.)
     const indexHtml = path.join(DIST_DIR, 'index.html');
     if (!pathname.startsWith('/api/') && !path.extname(pathname) && fs.existsSync(indexHtml)) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -553,11 +876,7 @@ function createServer(options = {}) {
     }
 
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end(
-      fs.existsSync(indexHtml)
-        ? 'Not found'
-        : 'Frontend bundle missing. Run: npm run build'
-    );
+    res.end(fs.existsSync(indexHtml) ? 'Not found' : 'Frontend bundle missing. Run: npm run build');
   });
 
   let ppsTimer = null;
@@ -608,6 +927,7 @@ function createServer(options = {}) {
       }
 
       engine.update(now);
+      captureDatasetFrame(now);
       broadcastState(boundPort);
     }, 200);
   }
@@ -619,14 +939,14 @@ function createServer(options = {}) {
     sseClients.clear();
   });
 
-  return { server, engine, sourceMeta, ingestTelemetryObject };
+  return { server, engine, sourceMeta, ingestTelemetryObject, datasetRecorder };
 }
 
 if (require.main === module) {
   const PORT = Number(process.env.PORT) || 5050;
   const { server } = createServer();
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n[TechBIT v2.2 React SPA Workbench] http://localhost:${PORT}`);
+    console.log(`\n[TechBIT v2.3 ML & SPA Workbench] http://localhost:${PORT}`);
     const urls = getLanUrls(PORT);
     if (urls.length > 0) {
       console.log(`[TechBIT Wi-Fi Telemetry Endpoint] ${urls.join(' | ')}`);
