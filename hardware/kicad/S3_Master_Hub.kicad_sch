@@ -1,0 +1,20 @@
+(kicad_sch
+  (version 20231120)
+  (generator "eeschema")
+  (generator_version "10.0")
+  (uuid "28155ba9-ed7e-4a79-a56e-4083f1fb1d01")
+  (paper "A4")
+  (title_block
+    (title "TechBIT ESP32-S3 Master Hub (CAN + 1.28in GC9A01 TFT + MicroSD)")
+    (date "2026-11-25")
+    (rev "1.0-LUT-1Layer")
+    (company "TechBIT")
+  )
+  (lib_symbols)
+  (text "COMPLETE SINGLE-LAYER (B.Cu) TECHBIT ESP32-S3 MASTER HUB (71.0 x 96.0 mm)\n\nTOP SIDE (F.Cu - THT & Modules):\n- U1: ESP32-S3-DevKitC-1 N16R8 (2x22 2.54mm PinSockets, Wi-Fi Antenna UP, Dual USB-C DOWN)\n  Left L1..L22: L1/L2=3V3, L3=RST, L4=GPIO4(CAN_TX), L5=GPIO5(CAN_RX),\n               L15=GPIO9(TFT_CS), L16=GPIO10(TFT_RES), L17=GPIO11(TFT_DC),\n               L18=GPIO12(TFT_MOSI), L19=GPIO13(TFT_SCK), L20=GPIO14(TFT_LED), L21=5V, L22=GND\n  Right R1..R22: R1=GND, R6=GPIO42(SD_CS), R7=GPIO41(SD_MOSI), R8=GPIO40(SD_MISO),\n                 R9=GPIO39(SD_SCK), R21=GND, R22=GND\n- MOD1: MP1584EN DC-DC Buck Converter (D-SUN 22.1x16.8mm, 8 holes, 4.5-28V -> 5.0V 3A; IN+=12V, IN-=GND, OUT+=5V, OUT-=GND)\n- MOD2: SN65HVD230 CAN Transceiver 3.3V (1=3V3, 2=GND, 3=CAN_TX, 4=CAN_RX, 5=CAN_L, 6=CAN_H)\n- J1: KF301-4P (5.08mm) Vehicle 12V + CAN Bus (1=+12V_RAW, 2=GND, 3=CAN_L, 4=CAN_H; entry UP)\n- JP1: 1x02 (2.54mm) CAN 120R Termination Jumper (Pin1=CAN_H, Pin2=CAN_TERM_MID -> R1 -> CAN_L)\n- J2: 1x08 (2.54mm) 1.28in Red GC9A01 TFT SPI (1=3V3, 2=GND, 3=CS, 4=RES, 5=DC/A0, 6=MOSI/SDA, 7=SCK, 8=LED)\n- J3: 1x04 (2.54mm) 1.28in Red Module MicroSD SPI (1=SD_CS, 2=SD_MOSI, 3=SD_MISO, 4=SD_SCK)\n- C1: 100uF Radial Electrolytic (D5.0/P2.5) +5V_BUCK Bulk Filter (+ on Pin1)\n- C2: 10uF Radial Electrolytic (D5.0/P2.5) +3V3 Filter (+ on Pin1)\n\nBOTTOM SIDE (B.Cu - SMD on Copper Layer):\n- R1: 120R (1206) CAN Bus Termination Resistor (JP1 Pin2 CAN_TERM_MID <-> CAN_L)\n- C3: 100nF (1206) +3V3 High-Frequency Decoupling Capacitor (near J2 TFT)"
+    (exclude_from_sim no)
+    (at 20.0 30.0 0)
+    (effects (font (size 2.0 2.0) (thickness 0.3)) (justify left top))
+    (uuid "095303b3-5cbc-4913-a3d9-534ab05c9821")
+  )
+)

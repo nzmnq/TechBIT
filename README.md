@@ -9,7 +9,7 @@
 | Модуль | Призначення | Документація |
 |---|---|---|
 | [`website/`](website/) | B2B IoT + SaaS платформа, калькулятор ROI автопарку, Drop & Hook моніторинг, `AdminPage`, i18n (`uk`/`en`), React + Express API | [website/README.md](website/README.md) |
-| [`hardware/`](hardware/) | Принципова схема та розводка плати в `KiCad 10`, 3D-моделі (`.wrl`), рендери, PDF 1:1 для ЛУТ/УФ-маски та Python-генератори | [hardware/README.md](hardware/README.md) |
+| [`hardware/`](hardware/) | Принципові схеми та розводка плат у `KiCad 10` (`Wheel_Sensor_Amplifier` для коліс і `S3_Master_Hub` для кабіни), 3D-моделі (`.wrl`), рендери, PDF 1:1 для ЛУТ/УФ-маски та Python-генератори | [hardware/README.md](hardware/README.md) |
 | [`firmware/`](firmware/) | Прошивка `PlatformIO` TechBIT v2.0 (`c3_node`, `c3_trailer_bridge` ESP-NOW, `s3_master` Black Box + LTE + BLE, нативні тести `native_test`) | [firmware/README.md](firmware/README.md) |
 | [`workbench/`](workbench/) | Інженерний стенд TechBIT v2.2 (`React Router` + `Vite` SPA + `Node.js` + `Web Serial` / Wi-Fi POST + `SSE`, порт `5050`) | [workbench/README.md](workbench/README.md) |
 | [`.plans/`](.plans/) | Архітектурна специфікація об'єднання гілок у монорепозиторій | [monorepo-unification-spec.md](.plans/monorepo-unification-spec.md) |

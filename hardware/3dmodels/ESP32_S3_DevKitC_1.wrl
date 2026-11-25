@@ -1,0 +1,219 @@
+#VRML V2.0 utf8
+# ESP32-S3-DevKitC-1 N16R8 (28.0 x 69.0 x 1.6 mm, 2x22 2.54mm pins, Wi-Fi Antenna UP, Dual USB-C DOWN)
+# Origin: L1 = (0, 0), R1 = (25.40 mm = 10.0 VRML units, 0). 1 VRML unit = 2.54 mm, VRML +Y = PCB -Y.
+Group {
+  children [
+    # Main DevKitC PCB (28.0 x 69.0 x 1.6 mm), center=(12.70, +24.00, 9.30) mm
+    Transform {
+      translation 5.0000 -9.4488 3.6614
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.07 0.08 0.11 specularColor 0.25 0.25 0.25 shininess 0.40 }
+          }
+          geometry Box { size 11.0236 27.1654 0.6299 }
+        }
+      ]
+    }
+    # ESP32-S3-WROOM-1 module base PCB (18.0 x 25.5 x 0.8 mm), center=(12.70, +2.75, 10.50) mm
+    Transform {
+      translation 5.0000 -1.0827 4.1339
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.08 0.13 0.10 specularColor 0.25 0.25 0.25 shininess 0.35 }
+          }
+          geometry Box { size 7.0866 10.0394 0.3150 }
+        }
+      ]
+    }
+    # WROOM-1 Silver RF Shield Can (16.5 x 17.5 x 2.4 mm), center=(12.70, +6.75, 12.10) mm
+    Transform {
+      translation 5.0000 -2.6575 4.7638
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.78 0.80 0.82 specularColor 0.4 0.4 0.4 shininess 0.85 }
+          }
+          geometry Box { size 6.4961 6.8898 0.9449 }
+        }
+      ]
+    }
+    # WROOM-1 PCB Trace Antenna Meander Accents (top of WROOM, Wi-Fi UP)
+    Transform {
+      translation 5.0000 3.0000 4.3071
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.82 0.68 0.25 specularColor 0.4 0.4 0.4 shininess 0.70 }
+          }
+          geometry Box { size 5.5118 0.3150 0.0591 }
+        }
+      ]
+    }
+    Transform {
+      translation 3.4000 2.2000 4.3071
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.82 0.68 0.25 specularColor 0.4 0.4 0.4 shininess 0.70 }
+          }
+          geometry Box { size 0.3150 1.4000 0.0591 }
+        }
+      ]
+    }
+    Transform {
+      translation 6.6000 2.2000 4.3071
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.82 0.68 0.25 specularColor 0.4 0.4 0.4 shininess 0.70 }
+          }
+          geometry Box { size 0.3150 1.4000 0.0591 }
+        }
+      ]
+    }
+    # AMS1117-3.3 LDO Voltage Regulator (black SOT-223 body)
+    Transform {
+      translation 3.5433 -10.2362 4.2913
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.12 0.12 0.12 specularColor 0.2 0.2 0.2 shininess 0.40 }
+          }
+          geometry Box { size 2.5591 1.3780 0.6299 }
+        }
+      ]
+    }
+    # LDO Silver Tab
+    Transform {
+      translation 3.5433 -9.3701 4.2126
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.80 0.80 0.82 specularColor 0.3 0.3 0.3 shininess 0.75 }
+          }
+          geometry Box { size 1.3780 0.4724 0.4724 }
+        }
+      ]
+    }
+    # WS2812 RGB LED (white 5050 housing)
+    Transform {
+      translation 7.0866 -10.2362 4.2717
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.90 0.90 0.88 specularColor 0.2 0.2 0.2 shininess 0.30 }
+          }
+          geometry Box { size 1.9685 1.9685 0.5906 }
+        }
+      ]
+    }
+    # WS2812 Emitter Lens
+    Transform {
+      translation 7.0866 -10.2362 4.4488
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.92 0.72 0.20 specularColor 0.3 0.3 0.3 shininess 0.50 }
+          }
+          geometry Box { size 1.1811 1.1811 0.2756 }
+        }
+      ]
+    }
+    # USB-UART Bridge QFN IC (CP2102 / CH343)
+    Transform {
+      translation 5.0000 -15.3543 4.1535
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.11 0.11 0.12 specularColor 0.2 0.2 0.2 shininess 0.45 }
+          }
+          geometry Box { size 1.9685 1.9685 0.3543 }
+        }
+      ]
+    }
+    # RST Tactile Button (left)
+    Transform {
+      translation 2.4409 -18.1102 4.2717
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.78 0.79 0.81 specularColor 0.3 0.3 0.3 shininess 0.70 }
+          }
+          geometry Box { size 1.5748 1.1811 0.5906 }
+        }
+      ]
+    }
+    Transform {
+      translation 2.4409 -18.1102 4.5669
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.14 0.14 0.15 specularColor 0.2 0.2 0.2 shininess 0.35 }
+          }
+          geometry Box { size 0.7087 0.7087 0.3150 }
+        }
+      ]
+    }
+    # BOOT Tactile Button (right)
+    Transform {
+      translation 7.5591 -18.1102 4.2717
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.78 0.79 0.81 specularColor 0.3 0.3 0.3 shininess 0.70 }
+          }
+          geometry Box { size 1.5748 1.1811 0.5906 }
+        }
+      ]
+    }
+    Transform {
+      translation 7.5591 -18.1102 4.5669
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.14 0.14 0.15 specularColor 0.2 0.2 0.2 shininess 0.35 }
+          }
+          geometry Box { size 0.7087 0.7087 0.3150 }
+        }
+      ]
+    }
+    # Left USB-C Port (Native USB, bottom edge DOWN)
+    Transform {
+      translation 2.9528 -21.8110 4.6063
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.80 0.82 0.84 specularColor 0.4 0.4 0.4 shininess 0.80 }
+          }
+          geometry Box { size 3.5433 2.8740 1.2598 }
+        }
+      ]
+    }
+    # Right USB-C Port (UART Bridge, bottom edge DOWN)
+    Transform {
+      translation 7.0472 -21.8110 4.6063
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.80 0.82 0.84 specularColor 0.4 0.4 0.4 shininess 0.80 }
+          }
+          geometry Box { size 3.5433 2.8740 1.2598 }
+        }
+      ]
+    }
+    # Power Red LED & RX/TX LEDs
+    Transform {
+      translation 5.0000 -18.5039 4.1339
+      children [
+        Shape {
+          appearance Appearance {
+            material Material { diffuseColor 0.80 0.15 0.15 specularColor 0.3 0.3 0.3 shininess 0.45 }
+          }
+          geometry Box { size 0.6299 0.3937 0.3150 }
+        }
+      ]
+    }
+  ]
+}

@@ -38,8 +38,9 @@ static constexpr bool STATUS_LED_ACTIVE_LOW = true;
 
 #elif defined(TECHBIT_ROLE_S3_MASTER)
 
-// ---- ESP32-S3 Master & Black Box (Strictly in Cab, NO direct analog sensors!) ----
-// Avoids GPIO19..20 (USB D-/D+) and GPIO26..37 (Octal Flash / PSRAM).
+// ---- ESP32-S3-DevKitC-1 N16R8 Master & Black Box (Strictly in Cab, NO direct analog sensors!) ----
+// Avoids GPIO26..37 (Octal Flash / PSRAM), GPIO19..20 (USB D-/D+), GPIO43..44 (UART0),
+// GPIO38/48 (RGB LED), and strapping pins GPIO3/45/46.
 
 // Tractor CAN bus (receives Tractor Front + Rear C3 Nodes)
 static constexpr int PIN_CAN_TX          = 4;   // GPIO4 -> CAN TXD
@@ -51,13 +52,25 @@ static constexpr int PIN_LTE_RX          = 18;
 static constexpr int PIN_LTE_PWRKEY      = 16;
 static constexpr int PIN_LTE_RESET       = 21;
 
-// Cabin Mini LED Indicator (Yellow / Red / Green + Wheel Code Display — NO OLED)
+// Cabin Mini LED Indicator & Critical Buzzer
 static constexpr int PIN_LED_GREEN       = 15;  // Normal system indicator
 static constexpr int PIN_LED_YELLOW      = 7;   // Yellow pre-warning (> 60s)
 static constexpr int PIN_LED_RED         = 6;   // Critical Red hazard
-static constexpr int PIN_BUZZER          = 14;  // Optional critical buzzer (RED state)
-static constexpr int PIN_DISP_CLK        = 12;  // Wheel code LED module (e.g. "P2-L") Clock
-static constexpr int PIN_DISP_DIO        = 13;  // Wheel code LED module Data
+static constexpr int PIN_BUZZER          = 8;   // Optional critical buzzer (RED state)
+
+// 1.28" Round GC9A01 240x240 SPI TFT Display (SPI2 / FSPI)
+static constexpr int PIN_TFT_CS          = 9;   // Display Chip Select
+static constexpr int PIN_TFT_RES         = 10;  // Display Hardware Reset
+static constexpr int PIN_TFT_DC          = 11;  // Data/Command (A0 on red display PCB)
+static constexpr int PIN_TFT_MOSI        = 12;  // SPI MOSI (SDA on red display PCB)
+static constexpr int PIN_TFT_SCK         = 13;  // SPI Clock (SCK on red display PCB)
+static constexpr int PIN_TFT_LED         = 14;  // Backlight PWM (LEDC)
+
+// MicroSD Card Reader on back of display (SPI3 / HSPI)
+static constexpr int PIN_SD_CS           = 42;  // SD Card Chip Select
+static constexpr int PIN_SD_MOSI         = 41;  // SD Card MOSI
+static constexpr int PIN_SD_MISO         = 40;  // SD Card MISO
+static constexpr int PIN_SD_SCK          = 39;  // SD Card SCK
 
 // Service Button on S3 enclosure: enables BLE Installer Service Mode for 15 minutes
 static constexpr int PIN_BTN_SERVICE     = 0;   // GPIO0 (BOOT button on S3)

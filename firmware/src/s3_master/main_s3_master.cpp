@@ -13,8 +13,10 @@
 #include "InstallerBleService.h"
 #include "LteOfflineQueue.h"
 #include "OtaManager.h"
+#include "RoundDisplayGc9a01.h"
 #include "RuleConfig.h"
 #include "RuleEngine.h"
+#include "SdCardLogger.h"
 #include "board_pins.h"
 #include "can_protocol_v2.h"
 #include "esp_now_protocol.h"
@@ -29,6 +31,8 @@ rules::RuleEngine       g_rules;
 rules::BlackBoxBuffer   g_blackBox;
 LteOfflineQueue         g_lte;
 InstallerBleService     g_ble;
+RoundDisplayGc9a01      g_display;
+SdCardLogger            g_sd;
 Preferences             g_prefs;
 
 QueueHandle_t           g_canRxQueue    = nullptr;
@@ -37,6 +41,7 @@ QueueHandle_t           g_espNowQueue   = nullptr;
 char                    g_deviceId[16]  = "S3_000000";
 uint32_t                g_eventSeq      = 0;
 uint32_t                g_lastEvalMs    = 0;
+uint32_t                g_lastDispMs    = 0;
 uint32_t                g_lastLteHbMs   = 0;
 uint32_t                g_lastBtnMs     = 0;
 uint32_t                g_ledTestEndMs  = 0;
@@ -219,6 +224,7 @@ void triggerBlackBoxUpload(const rules::BurstTriggerEvent& trig, uint32_t nowMs)
         sumCount);
 
     g_lte.enqueuePayload(jsonBuf);
+    g_sd.saveAnomalyBurst(g_eventSeq, trig.wheelCode, sevStr, jsonBuf);
 
     // Ask trigger C3 Node for raw detail chunk burst as well
     uint8_t cmd[8];
@@ -236,13 +242,14 @@ void publishS3WorkbenchJson() {
     const char* sev = (ind.driverSeverity == rules::SEV_RED)
                           ? "RED"
                           : (ind.driverSeverity == rules::SEV_YELLOW ? "YELLOW" : "GREEN");
-    static char buf[1200];
+    static char buf[1360];
     size_t pos = static_cast<size_t>(std::snprintf(
         buf, sizeof(buf),
         "{\"type\":\"techbit_s3_master\",\"mcu\":\"ESP32-S3\",\"deviceId\":\"%s\","
         "\"tractorId\":\"%s\",\"trailerId\":\"%s\",\"severity\":\"%s\",\"wheelCode\":\"%s\","
         "\"buzzerOn\":%s,\"activeNodes\":%u,\"offlineNodes\":%u,\"blackBoxRecs\":%u,"
-        "\"bleActive\":%s,\"lteOnline\":%s,\"pendingQueue\":%u,\"shadow\":%s,\"nodes\":[",
+        "\"bleActive\":%s,\"lteOnline\":%s,\"pendingQueue\":%u,\"shadow\":%s,"
+        "\"sdMounted\":%s,\"sdEvents\":%lu,\"canRx\":%lu,\"nodes\":[",
         g_deviceId,
         g_rules.tractorId(),
         g_rules.trailerId()[0] ? g_rules.trailerId() : "",
@@ -255,7 +262,10 @@ void publishS3WorkbenchJson() {
         g_ble.isActive() ? "true" : "false",
         g_lte.isModemOnline() ? "true" : "false",
         static_cast<unsigned>(g_lte.pendingCount()),
-        g_rules.config().shadowModeEnabled ? "true" : "false"));
+        g_rules.config().shadowModeEnabled ? "true" : "false",
+        g_sd.isMounted() ? "true" : "false",
+        static_cast<unsigned long>(g_sd.savedEvents()),
+        static_cast<unsigned long>(g_can.rxCount())));
 
     bool first = true;
     const auto* nodes = g_rules.nodes();
@@ -300,7 +310,16 @@ void printStatus() {
                   g_lte.isModemOnline() ? "ONLINE" : "OFFLINE",
                   g_lte.pendingCount(),
                   static_cast<unsigned long>(cfg.configVersion));
-    Serial.println("CLI: status | ble on | ble off | cfg <json> | sim | dump\n");
+    Serial.printf("TFT=%s(%s) SD=%s(%lu/%luMB rows=%lu events=%lu) CAN_RX=%lu\n",
+                  g_display.isReady() ? "OK" : "ERR",
+                  g_display.usingPsram() ? "PSRAM" : "BAND",
+                  g_sd.isMounted() ? "MOUNTED" : "ABSENT",
+                  static_cast<unsigned long>(g_sd.usedMb()),
+                  static_cast<unsigned long>(g_sd.totalMb()),
+                  static_cast<unsigned long>(g_sd.loggedRows()),
+                  static_cast<unsigned long>(g_sd.savedEvents()),
+                  static_cast<unsigned long>(g_can.rxCount()));
+    Serial.println("CLI: status | ble on | ble off | cfg <json> | sd | disp | sim | dump\n");
 }
 
 void handleSerialCmd(const char* line) {
@@ -326,6 +345,22 @@ void handleSerialCmd(const char* line) {
             Serial.printf("[S3 Master] Updated remote config to v%lu\n",
                           static_cast<unsigned long>(g_rules.config().configVersion));
         }
+    } else if (std::strcmp(line, "sd") == 0) {
+        if (!g_sd.isMounted()) {
+            g_sd.remount();
+        } else {
+            g_sd.refreshUsageStats();
+        }
+        Serial.printf("[S3 SD] mounted=%s totalMB=%lu usedMB=%lu rows=%lu events=%lu\n",
+                      g_sd.isMounted() ? "true" : "false",
+                      static_cast<unsigned long>(g_sd.totalMb()),
+                      static_cast<unsigned long>(g_sd.usedMb()),
+                      static_cast<unsigned long>(g_sd.loggedRows()),
+                      static_cast<unsigned long>(g_sd.savedEvents()));
+    } else if (std::strcmp(line, "disp") == 0) {
+        g_ledTestEndMs = millis() + 3000U;
+        g_lastDispMs   = 0U;
+        Serial.println("[S3 TFT] Display & LED self-test active for 3s.");
     } else if (std::strcmp(line, "sim") == 0) {
         rules::BurstTriggerEvent sim{};
         sim.triggered     = true;
@@ -357,6 +392,11 @@ void pollSerialCli() {
 } // namespace
 
 void setup() {
+    pinMode(PIN_TFT_CS, OUTPUT);
+    digitalWrite(PIN_TFT_CS, HIGH);
+    pinMode(PIN_SD_CS, OUTPUT);
+    digitalWrite(PIN_SD_CS, HIGH);
+
     OtaManager::confirmAppValidAfterSelfTest();
 
     pinMode(PIN_LED_GREEN, OUTPUT);
@@ -389,6 +429,8 @@ void setup() {
 
     g_can.begin(PIN_CAN_TX, PIN_CAN_RX);
     g_lte.begin(PIN_LTE_RX, PIN_LTE_TX, PIN_LTE_PWRKEY, "https://api.techbit.ua/api/ingest");
+    g_display.begin();
+    g_sd.begin();
 
     g_canRxQueue  = xQueueCreate(48, sizeof(CanFrame));
     g_espNowQueue = xQueueCreate(16, sizeof(EspNowRxItem));
@@ -476,9 +518,29 @@ void loop() {
         if (trig.triggered) {
             triggerBlackBoxUpload(trig, nowMs);
         }
+        if (sCnt > 0U) {
+            char tsUtc[24];
+            rules::BlackBoxBuffer::formatIsoUtc(utcSec, tsUtc);
+            g_sd.logTelemetrySnapshot(tsUtc, nowMs, g_rules.indicator(), g_rules.nodes(), kMaxTrackedNodes);
+        }
         if (g_serialJson) {
             publishS3WorkbenchJson();
         }
+    }
+
+    if (g_lastDispMs == 0U || (nowMs - g_lastDispMs >= 200U)) {
+        g_lastDispMs = nowMs;
+        g_display.renderDashboard(
+            g_rules.indicator(),
+            g_rules.nodes(),
+            kMaxTrackedNodes,
+            g_can.rxCount(),
+            g_sd.isMounted(),
+            g_sd.savedEvents(),
+            g_ble.isActive(),
+            g_blackBox.size(),
+            nowMs < g_ledTestEndMs,
+            nowMs);
     }
 
     updateCabinMiniLedIndicator(g_rules.indicator(), nowMs);
